@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where node *)",
+      "Bash(cmd //c \".\\\\node_modules\\\\.bin\\\\electron.cmd --version\")",
+      "Bash(cmd //c \"set ELECTRON_RUN_AS_NODE= && .\\\\node_modules\\\\.bin\\\\electron.cmd .\")",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(powershell -Command \"[System.Environment]::GetEnvironmentVariable\\('ELECTRON_RUN_AS_NODE', 'User'\\)\")",
+      "Bash(powershell -Command \"[System.Environment]::GetEnvironmentVariable\\('ELECTRON_RUN_AS_NODE', 'Machine'\\)\")",
+      "Bash(powershell -Command \"[System.Environment]::GetEnvironmentVariable\\('ELECTRON_RUN_AS_NODE', 'Process'\\)\")",
+      "Bash(node launcher.cjs)",
+      "Bash(node -e \"console.log\\(process.env.ELECTRON_RUN_AS_NODE\\)\")",
+      "Bash(cscript //Nologo \"C:\\\\Users\\\\hexi\\\\Desktop\\\\CalendarWidget.vbs\")",
+      "Bash(powershell -Command \"\\(Get-Process electron\\).Count\")",
+      "Bash(node -e ' *)",
+      "Bash(powershell -Command ' *)",
+      "Bash(powershell -Command \"Start-Process 'C:\\\\Users\\\\hexi\\\\Desktop\\\\CalendarWidget.lnk'\")",
+      "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id, MainWindowTitle\")",
+      "Bash(reg query *)",
+      "Bash(cmd /c \"reg query HKCU\\\\Environment /v ELECTRON_RUN_AS_NODE\")",
+      "Bash(cmd /c \"set ELECTRON_RUN_AS_NODE\")"
+    ]
+  }
+}
