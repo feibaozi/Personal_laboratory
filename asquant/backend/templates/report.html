@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>{{ name }} - AsQuant Report</title>
+<style>
+  @page { size: A4; margin: 2cm; }
+  body { font-family: 'Microsoft YaHei', 'SimHei', Arial, sans-serif; background: #fff; color: #1f2937; padding: 20px; max-width: 900px; margin: auto; }
+  h1 { color: #111827; border-bottom: 3px solid #374151; padding-bottom: 12px; font-size: 1.5em; }
+  h2 { color: #4b5563; font-size: 1.1em; margin-top: 28px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+  .metric { background: #f9fafb; border: 1px solid #d1d5db; border-radius: 8px; padding: 14px; text-align: center; }
+  .metric .label { font-size: 0.7em; color: #6b7280; text-transform: uppercase; }
+  .metric .value { font-size: 1.3em; font-weight: bold; color: #111827; margin-top: 4px; }
+  .pos { color: #dc2626; }
+  .neg { color: #16a34a; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin: 12px 0; }
+  th { text-align: left; color: #6b7280; border-bottom: 2px solid #d1d5db; padding: 8px 6px; }
+  td { padding: 6px 6px; border-bottom: 1px solid #e5e7eb; }
+  img { max-width: 100%; margin: 12px 0; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .meta { color: #6b7280; font-size: 0.85em; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 0.75em; color: #9ca3af; text-align: center; }
+  hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+</style>
+</head>
+<body>
+<h1>{{ name }}</h1>
+<p class="meta">
+  {{ config.get('start_date', '') }} ~ {{ config.get('end_date', '') }} |
+  Factors: {{ config.get('factor_names', [])|join(', ') }} |
+  Weighting: {{ config.get('weighting', '') }} |
+  Generated: {{ generated_at }}
+</p>
+
+<hr>
+
+<h2>Performance Summary</h2>
+<div class="metrics">
+  <div class="metric"><div class="label">Total Return</div><div class="value {{ 'pos' if summary.total_return > 0 else 'neg' }}">{{ '{:.2%}'.format(summary.total_return) }}</div></div>
+  <div class="metric"><div class="label">Annual Return</div><div class="value {{ 'pos' if summary.annual_return > 0 else 'neg' }}">{{ '{:.2%}'.format(summary.annual_return) }}</div></div>
+  <div class="metric"><div class="label">Volatility</div><div class="value">{{ '{:.2%}'.format(summary.volatility) }}</div></div>
+  <div class="metric"><div class="label">Max Drawdown</div><div class="value neg">{{ '{:.2%}'.format(summary.max_drawdown) }}</div></div>
+</div>
+
+<h2>Risk Ratios</h2>
+<div class="metrics">
+  <div class="metric"><div class="label">Sharpe</div><div class="value">{{ '{:.2f}'.format(summary.sharpe) }}</div></div>
+  <div class="metric"><div class="label">Calmar</div><div class="value">{{ '{:.2f}'.format(summary.calmar) }}</div></div>
+  <div class="metric"><div class="label">Sortino</div><div class="value">{{ '{:.2f}'.format(summary.sortino) }}</div></div>
+  <div class="metric"><div class="label">Info Ratio</div><div class="value">{{ '{:.2f}'.format(summary.information_ratio) }}</div></div>
+</div>
+
+<h2>Risk Attribution</h2>
+<div class="metrics">
+  <div class="metric"><div class="label">Alpha</div><div class="value {{ 'pos' if summary.alpha > 0 else 'neg' }}">{{ '{:.2%}'.format(summary.alpha) }}</div></div>
+  <div class="metric"><div class="label">Beta</div><div class="value">{{ '{:.2f}'.format(summary.beta) }}</div></div>
+  <div class="metric"><div class="label">R²</div><div class="value">{{ '{:.3f}'.format(summary.r_squared) }}</div></div>
+  <div class="metric"><div class="label">VaR (95%)</div><div class="value">{{ '{:.2%}'.format(summary.var_95) }}</div></div>
+</div>
+
+<hr>
+
+{% if charts.equity %}
+<h2>Equity Curve</h2>
+<img src="{{ charts.equity }}" alt="Equity Curve"/>
+{% endif %}
+
+{% if charts.drawdown %}
+<h2>Drawdown</h2>
+<img src="{{ charts.drawdown }}" alt="Drawdown"/>
+{% endif %}
+
+{% if charts.distribution %}
+<h2>Return Distribution</h2>
+<img src="{{ charts.distribution }}" alt="Daily Return Distribution"/>
+{% endif %}
+
+{% if summary.monthly_returns %}
+<hr>
+<h2>Monthly Returns</h2>
+<table>
+  <thead><tr><th>Month #</th><th>Return</th></tr></thead>
+  <tbody>
+  {% for m in summary.monthly_returns %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td class="{{ 'pos' if m.return > 0 else 'neg' }}">{{ '{:.2%}'.format(m.return) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<hr>
+
+<h2>Configuration</h2>
+<table>
+  <tbody>
+  {% for key, value in config.items() %}
+  <tr><td style="color:#6b7280;width:200px;">{{ key }}</td><td>{{ value }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="footer">
+  <p>AsQuant &mdash; Quantitative Investment Research Platform</p>
+  <p>Report generated on {{ generated_at }}</p>
+</div>
+</body>
+</html>

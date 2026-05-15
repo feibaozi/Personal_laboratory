@@ -18,7 +18,19 @@
       "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id, MainWindowTitle\")",
       "Bash(reg query *)",
       "Bash(cmd /c \"reg query HKCU\\\\Environment /v ELECTRON_RUN_AS_NODE\")",
-      "Bash(cmd /c \"set ELECTRON_RUN_AS_NODE\")"
+      "Bash(cmd /c \"set ELECTRON_RUN_AS_NODE\")",
+      "Bash(curl -s -X POST \"http://localhost:8000/api/v1/factor/backtest/ic?factor_name=return_1m&start_date=2025-06-01&end_date=2026-05-14&period=monthly&n_quantiles=3\")",
+      "Bash(python -c ' *)",
+      "Bash(curl -s -X POST \"http://localhost:8000/api/v1/factor/backtest/ic?factor_name=return_1m&start_date=2025-06-01&end_date=2026-05-14&period=monthly&n_quantiles=5\")",
+      "Bash(curl -s -X POST \"http://localhost:8000/api/v1/factor/backtest/ic?factor_name=return_3m&start_date=2025-06-01&end_date=2026-05-14&period=monthly\")",
+      "Bash(python -c \"import json, sys; d=json.load\\(sys.stdin\\); s=d.get\\('ic_summary',{}\\); print\\(f'IC mean={s.get\\(\\\\\"ic_mean\\\\\",0\\):.4f} ICIR={s.get\\(\\\\\"icir\\\\\",0\\):.4f} pts={len\\(d.get\\(\\\\\"ic_series\\\\\",[]\\)\\)}'\\)\")",
+      "Bash(curl -s -X POST \"http://localhost:8000/api/v1/factor/correlation\" -H \"Content-Type: application/json\" -d \"{\\\\\"factor_names\\\\\":[\\\\\"return_1m\\\\\",\\\\\"return_3m\\\\\",\\\\\"return_6m\\\\\",\\\\\"volatility_1m\\\\\"],\\\\\"date_str\\\\\":\\\\\"2026-05-13\\\\\"}\")",
+      "Bash(curl -s -X POST \"http://localhost:8000/api/v1/factor/screen\" -H \"Content-Type: application/json\" -d \"{\\\\\"conditions\\\\\":[{\\\\\"factor_name\\\\\":\\\\\"return_3m\\\\\",\\\\\"direction\\\\\":\\\\\"positive\\\\\"},{\\\\\"factor_name\\\\\":\\\\\"volatility_1m\\\\\",\\\\\"direction\\\\\":\\\\\"negative\\\\\"}],\\\\\"date\\\\\":\\\\\"2026-05-13\\\\\",\\\\\"top_n\\\\\":10}\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/backtest/runs/0d8b161f\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/backtest/run -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/backtest/runs/c2d8ed4a\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/backtest/runs/0d8b161f/daily\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/backtest/runs/4820b802\")"
     ]
   }
 }
