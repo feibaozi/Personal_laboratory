@@ -1,4 +1,5 @@
 import { ipcMain, BrowserWindow, app, dialog } from 'electron';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as db from './database';
 import { showNotificationWindow } from './notification-window';
@@ -107,6 +108,18 @@ export function registerIpcHandlers(): void {
       },
       0,
     );
+  });
+
+  // ---- Workbench ----
+
+  ipcMain.handle(IPC_CHANNELS.LAUNCH_WORKBENCH, () => {
+    const child = spawn('python', ['C:/Users/hexi/Desktop/WORKBENCH/main.py'], {
+      detached: true,
+      stdio: 'ignore',
+      shell: true,
+    });
+    child.unref();
+    return { success: true };
   });
 
   // ---- Data management ----

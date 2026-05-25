@@ -61,3 +61,19 @@ export async function addWatchlist(code: string, notes?: string, alertUpper?: nu
 export async function deleteWatchlist(id: number) {
   return api.delete("/market/watchlist/" + id);
 }
+
+export async function fetchPositions(code: string) {
+  return api.get<{ positions: { id: number; stock_code: string; shares: number; avg_cost: number; open_date: string | null; close_date: string | null; close_price: number | null; notes: string }[] }>(`/market/positions/${code}`);
+}
+
+export async function addPosition(code: string, shares: number, avgCost: number, openDate: string, notes?: string) {
+  return api.post("/market/positions", { stock_code: code, shares, avg_cost: avgCost, open_date: openDate, notes: notes || "" });
+}
+
+export async function closePosition(id: number, closeDate: string, closePrice: number) {
+  return api.put(`/market/positions/${id}/close`, { close_date: closeDate, close_price: closePrice });
+}
+
+export async function deletePosition(id: number) {
+  return api.delete("/market/positions/" + id);
+}

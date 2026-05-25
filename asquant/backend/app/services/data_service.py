@@ -150,16 +150,18 @@ class SyncManager:
                 df = await self.bs.fetch_index_daily(code, sd, ed)
             if df is None or df.empty:
                 continue
+            rows = []
             for _, row in df.iterrows():
-                idx = IndexDaily(
-                    index_code=code, index_name=name,
-                    trade_date=row["date"] if isinstance(row["date"], date) else date.fromisoformat(str(row["date"])),
-                    open=float(row["open"]), high=float(row["high"]),
-                    low=float(row["low"]), close=float(row["close"]),
-                    volume=int(row["volume"]) if not pd_isna(row.get("volume")) else 0,
-                )
-                await self.db.merge(idx)
-            total += len(df)
+                rows.append({
+                    "index_code": code, "index_name": name,
+                    "trade_date": row["date"] if isinstance(row["date"], date) else date.fromisoformat(str(row["date"])),
+                    "open": _safe_val(row["open"]), "high": _safe_val(row["high"]),
+                    "low": _safe_val(row["low"]), "close": _safe_val(row["close"]),
+                    "volume": int(row["volume"]) if not pd_isna(row.get("volume")) else 0,
+                })
+            await _bulk_upsert(self.db, IndexDaily, rows, ["index_code", "trade_date"])
+            total += len(rows)
+        await self.db.commit()
         return total
 
     async def sync_sector_daily(self) -> int:

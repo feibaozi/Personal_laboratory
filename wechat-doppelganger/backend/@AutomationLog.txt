@@ -1,0 +1,2 @@
+2026-05-22 14:05:16.328 <string>[6] <module> -> Find Control Timeout(10s): {ClassName: 'Qt51514QWindowIcon', ControlType: WindowControl}
+2026-05-22 14:17:00.771 <string>[5] <module> -> Find Control Timeout(10s): {Name: '微信', ControlType: WindowControl}

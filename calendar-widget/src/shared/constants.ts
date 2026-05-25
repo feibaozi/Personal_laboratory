@@ -100,6 +100,9 @@ export const IPC_CHANNELS = {
   // Notifications
   NOTIFICATION_TEST: 'notification:test',
 
+  // Workbench
+  LAUNCH_WORKBENCH: 'workbench:launch',
+
   // Data management
   DATA_SAVE_SNAPSHOT: 'data:saveSnapshot',
   DATA_GET_SNAPSHOTS: 'data:getSnapshots',

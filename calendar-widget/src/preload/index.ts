@@ -38,6 +38,9 @@ const api = {
   // Notifications
   sendTestNotification: () => ipcRenderer.invoke(IPC_CHANNELS.NOTIFICATION_TEST),
 
+  // Workbench
+  launchWorkbench: () => ipcRenderer.invoke(IPC_CHANNELS.LAUNCH_WORKBENCH),
+
   // Data management
   saveSnapshot: (name: string) => ipcRenderer.invoke(IPC_CHANNELS.DATA_SAVE_SNAPSHOT, name),
   getSnapshots: () => ipcRenderer.invoke(IPC_CHANNELS.DATA_GET_SNAPSHOTS),

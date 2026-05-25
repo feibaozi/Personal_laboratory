@@ -105,7 +105,10 @@
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('Backend OK,', len\\(d['indices']\\), 'indices'\\)\")",
       "Bash(curl -s -X POST \"http://localhost:8000/api/v1/data/sync/stock/000001/minute?freq=all&start_date=2026-04-15&end_date=2026-05-15\")",
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(f'  {r[\\\\\"freq\\\\\"]}min: {r[\\\\\"rows\\\\\"]} bars \\({r[\\\\\"source\\\\\"]}\\)'\\) for r in d[\\\\\"results\\\\\"]]; print\\(f'Total: {d[\\\\\"total_rows\\\\\"]} bars'\\)\")",
-      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(f'  {f[\\\\\"freq\\\\\"]}min: {f[\\\\\"rows\\\\\"]} bars'\\) for f in d[\\\\\"results\\\\\"]]\")"
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(f'  {f[\\\\\"freq\\\\\"]}min: {f[\\\\\"rows\\\\\"]} bars'\\) for f in d[\\\\\"results\\\\\"]]\")",
+      "Bash(cat /tmp/asquant_frontend.log 2>&1 | tail -20)",
+      "Read(//tmp/**)",
+      "Bash(netstat -ano)"
     ],
     "additionalDirectories": [
       "c:\\Users\\hexi\\Desktop\\VScode\\asquant\\data"

@@ -1,0 +1,26 @@
+[project]
+name = "clip-magic"
+version = "0.1.0"
+description = "AI 自动影视/播客高光切片生成器"
+requires-python = ">=3.11"
+dependencies = [
+    "faster-whisper>=1.0.0",
+    "openai>=1.0.0",
+    "ffmpeg-python>=0.2.0",
+    "yt-dlp>=2024.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "rich>=13.0.0",
+    "click>=8.0.0",
+    "imageio-ffmpeg>=0.5.0",
+]
+
+[project.scripts]
+clip-magic = "clip_magic.cli:main"
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["clip_magic*"]

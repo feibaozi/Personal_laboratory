@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactECharts from "echarts-for-react";
 import dayjs from "dayjs";
-import { fetchStockQuotes, fetchStockProfile, fetchStocks } from "@/api/market";
+import { fetchStockQuotes, fetchStockProfile, fetchStocks, fetchWatchlist, addWatchlist, deleteWatchlist, fetchPositions, addPosition, closePosition, deletePosition } from "@/api/market";
 import { api } from "@/api/client";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { MetricCard } from "@/components/common/MetricCard";
@@ -110,6 +110,57 @@ export function StockPage() {
   const [syncEnd, setSyncEnd] = useState(dayjs().format("YYYY-MM-DD"));
   const [sourceMode, setSourceMode] = useState<"real" | "all">("real");
   const [autoSource, setAutoSource] = useState(true);
+  const [autoSynced, setAutoSynced] = useState(false);
+  const [showPosModal, setShowPosModal] = useState(false);
+  const [posShares, setPosShares] = useState("100");
+  const [posCost, setPosCost] = useState("");
+  const [posDate, setPosDate] = useState(dayjs().format("YYYY-MM-DD"));
+  const [posNotes, setPosNotes] = useState("");
+
+  const watchlistQuery = useQuery({ queryKey: ["watchlist"], queryFn: fetchWatchlist, enabled: !!code });
+  const inWatchlist = watchlistQuery.data?.some((w: { stock_code: string }) => w.stock_code === code);
+
+  const posQuery = useQuery({
+    queryKey: ["positions", code],
+    queryFn: () => fetchPositions(code!),
+    enabled: !!code,
+  });
+  const positions = posQuery.data?.positions || [];
+  const totalShares = positions.reduce((s: number, p: { shares: number }) => s + p.shares, 0);
+  const avgCost = positions.length > 0 ? positions.reduce((s: number, p: { avg_cost: number; shares: number }) => s + p.avg_cost * p.shares, 0) / totalShares : 0;
+
+  const toggleWatchlist = async () => {
+    if (inWatchlist) {
+      const item = watchlistQuery.data?.find((w: { stock_code: string }) => w.stock_code === code);
+      if (item) { await deleteWatchlist((item as { id: number }).id); watchlistQuery.refetch(); }
+    } else {
+      await addWatchlist(code!, "");
+      watchlistQuery.refetch();
+    }
+  };
+
+  const handleAddPosition = async () => {
+    const shares = parseInt(posShares) || 0;
+    const cost = parseFloat(posCost) || p?.latest_price || 0;
+    if (shares > 0 && code) {
+      await addPosition(code, shares, cost, posDate, posNotes);
+      posQuery.refetch();
+      setShowPosModal(false);
+      setPosShares("100"); setPosCost(""); setPosDate(dayjs().format("YYYY-MM-DD")); setPosNotes("");
+    }
+  };
+
+  const handleClosePosition = async (id: number) => {
+    const closeDate = dayjs().format("YYYY-MM-DD");
+    const closePrice = p?.latest_price || 0;
+    await closePosition(id, closeDate, closePrice);
+    posQuery.refetch();
+  };
+
+  const handleDeletePosition = async (id: number) => {
+    await deletePosition(id);
+    posQuery.refetch();
+  };
 
   const startDate = useMemo(() => {
     if (isMinute(freq)) return syncStart;  // Use sync start date for minute charts
@@ -129,6 +180,29 @@ export function StockPage() {
     queryFn: () => fetchStockQuotes(code!, startDate, endDate, freq, sourceMode),
     enabled: !!code,
   });
+
+  // Auto-sync: if any data is stale (>1 day behind), auto-fetch latest
+  useEffect(() => {
+    if (!code || autoSynced) return;
+    const checkAndSync = async () => {
+      try {
+        const cov = await api.get<Coverage>(`/market/stocks/${code}/minute/coverage`);
+        const today = dayjs().format("YYYY-MM-DD");
+        const dailyMax = cov.daily?.max_date || "";
+        const minuteMax = (cov.minute || []).reduce((max: string, m: { max_date: string | null }) =>
+          (m.max_date && m.max_date > max) ? m.max_date : max, "");
+        const dataMax = dailyMax > minuteMax ? dailyMax : minuteMax;
+        if (dataMax && dataMax < today && dayjs(today).diff(dayjs(dataMax), "day") >= 1) {
+          setAutoSynced(true);
+          await api.post(`/data/sync/stock/${code}?start_date=${dataMax}&end_date=${today}`);
+          await api.post(`/data/sync/stock/${code}/minute?freq=all&start_date=${dataMax}&end_date=${today}`);
+          profile.refetch();
+          quotes.refetch();
+        }
+      } catch { /* silent */ }
+    };
+    checkAndSync();
+  }, [code, autoSynced]);
 
   const searchStocks = async (term: string) => {
     setSearchTerm(term);
@@ -174,7 +248,43 @@ export function StockPage() {
     series: [
       {
         name: "K线", type: "candlestick", data: ohlc,
-        itemStyle: { color: "#ef4444", color0: "#22c55e", borderColor: "#ef4444", borderColor0: "#22c55e" },
+        itemStyle: { color: "#ff6b6b", color0: "#4ecdc4", borderColor: "#ff6b6b", borderColor0: "#4ecdc4" },
+        markLine: avgCost > 0 ? {
+          silent: true, symbol: "none",
+          lineStyle: { color: p?.latest_price && p.latest_price >= avgCost ? "#ff6b6b" : "#4ecdc4", type: "dashed", width: 1.5 },
+          data: [{ yAxis: avgCost, label: { formatter: `成本 ¥${avgCost.toFixed(2)}`, position: "end", color: "#e2e8f0", fontSize: 11 }}],
+        } : undefined,
+        markPoint: positions.length > 0 ? {
+          symbol: "pin", symbolSize: 36,
+          label: { fontSize: 10, fontWeight: "bold" },
+          data: [
+            ...positions.filter((pos: { close_date: string | null }) => !pos.close_date).map((pos: { avg_cost: number; open_date: string | null }) => {
+              // Match open_date to chart xAxis — try exact match first, then date-only match
+              const od = pos.open_date || "";
+              let idx = dates.indexOf(od);
+              if (idx < 0) idx = dates.findIndex((d: string) => d.slice(0, 10) === od.slice(0, 10));
+              if (idx < 0) return null;
+              return {
+                name: "B", xAxis: idx, yAxis: pos.avg_cost,
+                symbol: "roundRect", symbolSize: [20, 14],
+                itemStyle: { color: "#ff6b6b" },
+                label: { formatter: "B", color: "#fff", fontSize: 10, fontWeight: "bold" },
+              };
+            }).filter(Boolean),
+            ...positions.filter((pos: { close_date: string | null }) => !!pos.close_date).map((pos: { close_price: number | null; close_date: string | null }) => {
+              const cd = pos.close_date || "";
+              let idx = dates.indexOf(cd);
+              if (idx < 0) idx = dates.findIndex((d: string) => d.slice(0, 10) === cd.slice(0, 10));
+              if (idx < 0) return null;
+              return {
+                name: "S", xAxis: idx, yAxis: pos.close_price || 0,
+                symbol: "roundRect", symbolSize: [20, 14],
+                itemStyle: { color: "#4ecdc4" },
+                label: { formatter: "S", color: "#fff", fontSize: 10, fontWeight: "bold" },
+              };
+            }).filter(Boolean),
+          ],
+        } : undefined,
       },
       ...(isMin ? [] : [
         { name: "MA5", type: "line", data: maData.ma5, smooth: true, symbol: "none", lineStyle: { color: "#f59e0b", width: 1 } },
@@ -254,16 +364,98 @@ export function StockPage() {
       {p && (
         <div className="flex items-start gap-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">{p.name}</h1>
-            <span className="text-sm text-gray-500 font-mono">{p.code}</span>
-            {p.industry && <span className="ml-3 text-xs text-gray-500">{p.industry}{p.area ? ` · ${p.area}` : ""}</span>}
+            <h1 className="text-2xl font-bold text-slate-100">{p.name}</h1>
+            <span className="text-sm text-slate-500 font-mono">{p.code}</span>
+            {p.industry && <span className="ml-3 text-xs text-slate-500">{p.industry}{p.area ? ` · ${p.area}` : ""}</span>}
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-gray-100">{p.latest_price?.toFixed(2)}</span>
+            <span className="text-3xl font-extrabold text-slate-100">{p.latest_price?.toFixed(2)}</span>
             {p.change_pct != null && (
-              <span className={`text-lg font-medium ${p.change_pct >= 0 ? "text-up" : "text-down"}`}>
+              <span className={`text-lg font-semibold ${p.change_pct >= 0 ? "text-up" : "text-down"}`}>
                 {p.change_pct >= 0 ? "+" : ""}{p.change_pct.toFixed(2)}%
               </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <button onClick={toggleWatchlist} className={`text-lg px-2 py-1 rounded-full transition-colors ${inWatchlist ? "text-amber-400" : "text-slate-600 hover:text-amber-400"}`} title={inWatchlist ? "取消自选" : "加入自选"}>
+              {inWatchlist ? "★" : "☆"}
+            </button>
+            <button onClick={() => { setPosCost(p.latest_price?.toFixed(2) || ""); setShowPosModal(true); }} className="text-sm px-3 py-1 rounded-full bg-teal-400/15 text-teal-400 border border-teal-400/30 hover:bg-teal-400/25 transition-colors font-medium">
+              + 持仓
+            </button>
+            {totalShares > 0 && (
+              <span className="text-xs px-2 py-1 rounded-full bg-rose-400/15 text-rose-400 border border-rose-400/30">
+                {totalShares}股 @ ¥{avgCost.toFixed(2)}
+                {p.latest_price && avgCost > 0 ? (
+                  <span className={`ml-1 font-semibold ${p.latest_price >= avgCost ? "text-up" : "text-down"}`}>
+                    {p.latest_price >= avgCost ? "+" : ""}{((p.latest_price - avgCost) / avgCost * 100).toFixed(1)}%
+                  </span>
+                ) : null}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Position Modal */}
+      {showPosModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPosModal(false)}>
+          <div className="card w-80 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-slate-200">添加持仓 — {p?.code}</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">股数</label>
+                <input type="number" className="input-field w-full text-sm" value={posShares} onChange={(e) => setPosShares(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">成本价</label>
+                <input type="number" step="0.01" className="input-field w-full text-sm" value={posCost} onChange={(e) => setPosCost(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">开仓日期</label>
+              <input type="date" className="input-field w-full text-sm" value={posDate} onChange={(e) => setPosDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">备注（可选）</label>
+              <input className="input-field w-full text-sm" value={posNotes} onChange={(e) => setPosNotes(e.target.value)} placeholder="如：突破买入" />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button className="btn-secondary text-sm" onClick={() => setShowPosModal(false)}>取消</button>
+              <button className="btn-primary text-sm" onClick={handleAddPosition}>确认开仓</button>
+            </div>
+            {positions.length > 0 && (
+              <div className="border-t border-[#2a3f5f] pt-3">
+                <p className="text-xs text-slate-500 mb-2">已有持仓：</p>
+                {positions.map((pos: { id: number; shares: number; avg_cost: number; open_date: string | null; close_date: string | null; close_price: number | null; notes: string }) => (
+                  <div key={pos.id} className="flex items-center justify-between text-xs py-1.5 border-b border-[#2a3f5f]/50 last:border-0">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-slate-300">
+                        {pos.shares}股 @ ¥{pos.avg_cost.toFixed(2)}
+                        {pos.open_date && <span className="text-slate-600 ml-1">{pos.open_date}</span>}
+                        {pos.notes ? <span className="text-slate-500 ml-1">({pos.notes})</span> : ""}
+                      </span>
+                      {pos.close_date ? (
+                        <span className="text-slate-600">已平仓 {pos.close_date} @ ¥{pos.close_price?.toFixed(2)} {
+                          pos.close_price && pos.avg_cost ? (
+                            <span className={pos.close_price >= pos.avg_cost ? "text-up" : "text-down"}>
+                              {pos.close_price >= pos.avg_cost ? "+" : ""}{((pos.close_price - pos.avg_cost) / pos.avg_cost * 100).toFixed(1)}%
+                            </span>
+                          ) : null
+                        }</span>
+                      ) : (
+                        <span className="text-teal-400">持仓中</span>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      {!pos.close_date && (
+                        <button className="text-amber-400 hover:text-amber-300 text-xs" onClick={() => handleClosePosition(pos.id)} title="平仓">平仓</button>
+                      )}
+                      <button className="text-rose-400 hover:text-rose-300 text-xs" onClick={() => handleDeletePosition(pos.id)}>删除</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

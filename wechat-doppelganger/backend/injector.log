@@ -1,0 +1,19 @@
+[Inject] Driver.EnsureLoaded => 0xC0000022
+[Inject] Attach(61736) => 0x00000000
+[Inject] Read 1358848 bytes from 'C:\veighna_studio\Lib\site-packages\wcferry\spy.dll'
+[Inject] MapImage => 0xC000010A
+[Inject] Driver.EnsureLoaded => 0xC0000022
+[Inject] Attach(62060) => 0x00000000
+[Inject] Read 1358848 bytes from 'C:\veighna_studio\Lib\site-packages\wcferry\spy.dll'
+[Inject] MapImage => 0xC000010A
+[Inject] Driver.EnsureLoaded => 0xC0000022
+[Inject] Attach(47628) => 0x00000000
+[Inject] Read 1358848 bytes from 'C:\veighna_studio\Lib\site-packages\wcferry\spy.dll'
+[Inject] Driver.EnsureLoaded => 0xC0000022
+[Inject] Attach(50684) => 0x00000000
+[Inject] Read 1358848 bytes from 'C:\veighna_studio\Lib\site-packages\wcferry\spy.dll'
+[Inject] MapImage => 0xC000010A
+[Inject] Driver.EnsureLoaded => 0xC0000022
+[Inject] Attach(82796) => 0x00000000
+[Inject] Read 1982976 bytes from 'C:\veighna_studio\Lib\site-packages\wcferry\spy_debug.dll'
+[Inject] MapImage => 0xC000010A

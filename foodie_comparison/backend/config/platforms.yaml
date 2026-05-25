@@ -1,0 +1,30 @@
+collectors:
+  meituan:
+    platform_name: "美团"
+    base_url: "https://i.meituan.com"
+    api_prefix: "/catering"
+    headers:
+      Referer: "https://i.meituan.com/"
+    shop_list_endpoint: "/meishi/api/poi/search"
+    menu_endpoint: "/catering/dish/detail"
+
+  eleme:
+    platform_name: "饿了么"
+    base_url: "https://h5.ele.me"
+    api_prefix: "/restapi"
+    headers:
+      Referer: "https://h5.ele.me/"
+    shop_list_endpoint: "/shopping/v2/restaurants"
+    menu_endpoint: "/shopping/v2/menu"
+
+  jd_waimai:
+    platform_name: "京东外卖"
+    base_url: "https://waimai.jd.com"
+    headers:
+      Referer: "https://waimai.jd.com/"
+
+  douyin_waimai:
+    platform_name: "抖音外卖"
+    base_url: "https://www.douyin.com"
+    headers:
+      Referer: "https://www.douyin.com/"

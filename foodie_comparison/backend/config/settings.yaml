@@ -1,0 +1,40 @@
+platforms:
+  meituan:
+    name: "美团"
+    base_url: "https://i.meituan.com"
+    icon: "🥡"
+    color: "#FFD100"
+    enabled: true
+  eleme:
+    name: "饿了么"
+    base_url: "https://h5.ele.me"
+    icon: "🥢"
+    color: "#00C853"
+    enabled: true
+  jd_waimai:
+    name: "京东外卖"
+    base_url: "https://waimai.jd.com"
+    icon: "🛵"
+    color: "#E83F27"
+    enabled: true
+  douyin_waimai:
+    name: "抖音外卖"
+    base_url: "https://www.douyin.com"
+    icon: "🎵"
+    color: "#000000"
+    enabled: true
+
+recommend:
+  weights:
+    price_sensitivity: 0.35
+    cuisine_preference: 0.25
+    recency: 0.20
+    rating: 0.20
+  decay_days: 30
+
+collector:
+  schedule:
+    price_sync_cron: "0 */2 * * *"
+    coupon_sync_cron: "0 */1 * * *"
+    platform_sync_cron: "0 8 * * *"
+    recommend_rebuild_cron: "0 2 * * *"

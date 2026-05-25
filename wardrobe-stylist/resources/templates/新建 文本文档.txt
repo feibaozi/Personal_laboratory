@@ -1,0 +1,6 @@
+├── male-slim.png        # 男-瘦削
+├── male-standard.png    # 男-标准
+├── male-athletic.png    # 男-健壮
+├── female-petite.png    # 女-娇小
+├── female-standard.png  # 女-标准
+└── female-curvy.png     # 女-丰满

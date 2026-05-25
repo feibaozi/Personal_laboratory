@@ -115,6 +115,19 @@ class MinuteQuote(Base):
     __table_args__ = (UniqueConstraint("stock_code", "trade_time", "freq"),)
 
 
+class Position(Base):
+    __tablename__ = "positions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    stock_code = Column(String(6))
+    shares = Column(Integer, default=0)
+    avg_cost = Column(Float)
+    open_date = Column(Date, nullable=True)      # 开仓日期
+    close_date = Column(Date, nullable=True)     # 平仓日期 (NULL=持仓中)
+    close_price = Column(Float, nullable=True)   # 平仓价格
+    added_at = Column(DateTime, default=func.now())
+    notes = Column(String(200))
+
+
 class SyncLog(Base):
     __tablename__ = "sync_log"
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -107,6 +107,14 @@ export function App() {
       >
         <TitleBar>
           <button
+            onClick={() => window.electronAPI.launchWorkbench()}
+            className="text-white/50 hover:text-white/80 text-sm px-2 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            title="Open Workbench"
+          >
+            Workbench
+          </button>
+          <button
             onClick={() => setShowSettings(true)}
             className="text-white/50 hover:text-white/80 text-sm w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}

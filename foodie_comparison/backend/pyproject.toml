@@ -1,0 +1,14 @@
+[project]
+name = "foodie_comparison_backend"
+version = "0.1.0"
+description = "外卖比价优惠券助手后端"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+
+[tool.alembic]
+script_location = "alembic"
+sqlalchemy.url = "postgresql+asyncpg://postgres:postgres@localhost:5432/foodie_dev"

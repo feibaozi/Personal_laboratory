@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from ..database import get_db
 from ..models.market import (
     IndexDaily, SectorDaily, MarketBreadth, NorthBoundFlow,
-    DailyQuote, MinuteQuote, Stock, WatchlistItem
+    DailyQuote, MinuteQuote, Stock, WatchlistItem, Position
 )
 from ..utils.date_utils import is_market_open
 
@@ -397,5 +397,70 @@ async def delete_watchlist(item_id: int, db: AsyncSession = Depends(get_db)):
     item = result.scalar_one_or_none()
     if item:
         await db.delete(item)
+        await db.commit()
+    return {"ok": True}
+
+
+# === Position endpoints ===
+
+@router.get("/positions")
+async def list_positions(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Position).order_by(Position.added_at.desc()))
+    items = []
+    for p in result.scalars().all():
+        items.append({"id": p.id, "stock_code": p.stock_code, "shares": p.shares,
+                       "avg_cost": p.avg_cost, "notes": p.notes,
+                       "added_at": p.added_at.isoformat() if p.added_at else None})
+    return {"positions": items}
+
+
+@router.get("/positions/{stock_code}")
+async def get_position(stock_code: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Position).where(Position.stock_code == stock_code).order_by(Position.added_at.desc()))
+    items = []
+    for p in result.scalars().all():
+        items.append({"id": p.id, "stock_code": p.stock_code, "shares": p.shares,
+                       "avg_cost": p.avg_cost, "notes": p.notes,
+                       "open_date": p.open_date.isoformat() if p.open_date else None,
+                       "close_date": p.close_date.isoformat() if p.close_date else None,
+                       "close_price": p.close_price,
+                       "added_at": p.added_at.isoformat() if p.added_at else None})
+    return {"positions": items}
+
+
+@router.post("/positions")
+async def add_position(body: dict, db: AsyncSession = Depends(get_db)):
+    from datetime import date as dt
+    p = Position(
+        stock_code=body["stock_code"],
+        shares=int(body.get("shares", 0)),
+        avg_cost=float(body.get("avg_cost", 0)),
+        open_date=dt.fromisoformat(body["open_date"]) if body.get("open_date") else None,
+        notes=body.get("notes", ""),
+    )
+    db.add(p)
+    await db.commit()
+    await db.refresh(p)
+    return {"id": p.id, "stock_code": p.stock_code, "shares": p.shares, "avg_cost": p.avg_cost}
+
+
+@router.put("/positions/{pos_id}/close")
+async def close_position(pos_id: int, body: dict, db: AsyncSession = Depends(get_db)):
+    from datetime import date as dt
+    result = await db.execute(select(Position).where(Position.id == pos_id))
+    p = result.scalar_one_or_none()
+    if p:
+        p.close_date = dt.fromisoformat(body["close_date"]) if body.get("close_date") else None
+        p.close_price = float(body["close_price"]) if body.get("close_price") else None
+        await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/positions/{pos_id}")
+async def delete_position(pos_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Position).where(Position.id == pos_id))
+    p = result.scalar_one_or_none()
+    if p:
+        await db.delete(p)
         await db.commit()
     return {"ok": True}
