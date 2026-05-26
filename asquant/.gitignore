@@ -15,6 +15,14 @@ data/*.db
 data/*.csv
 data/*.parquet
 
+# Security
+.env
+.env.*
+credentials.*
+*.pem
+*.key
+*.p12
+
 # IDE
 .idea/
 *.swp

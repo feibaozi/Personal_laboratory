@@ -11,6 +11,11 @@ output/
 *.ass
 
 .env
+.env.*
+credentials.*
+*.pem
+*.key
+*.p12
 
 dist/
 build/

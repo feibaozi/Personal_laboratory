@@ -4,9 +4,13 @@ node_modules/
 # next.js
 .next/
 
-# env
-.env*.local
+# env & secrets
+.env
+.env.*
+credentials.*
+*.pem
+*.key
+*.p12
 
 # misc
 .DS_Store
-*.pem

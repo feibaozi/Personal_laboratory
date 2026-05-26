@@ -1,0 +1,72 @@
+# ============================================
+# 敏感信息 — 防止 API Key / 密码泄露
+# ============================================
+.env
+.env.*
+*.env
+!*.env.example
+credentials.json
+credentials.*
+*_credentials.*
+service-account.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ============================================
+# 依赖
+# ============================================
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ============================================
+# IDE / 编辑器
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============================================
+# 数据库 / 缓存
+# ============================================
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite3
+.cache/
+.pytest_cache/
+.ruff_cache/
+*.log
+
+# ============================================
+# 构建产物
+# ============================================
+release/
+output/
+*.exe
+*.dll
+*.so
+*.dylib

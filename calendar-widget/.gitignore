@@ -5,3 +5,11 @@ release/
 *.db-journal
 *.db-wal
 .vite/
+
+# Security — prevent API key leaks
+.env
+.env.*
+credentials.*
+*.pem
+*.key
+*.p12
