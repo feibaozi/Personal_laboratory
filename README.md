@@ -51,34 +51,43 @@
 
 ---
 
-### 4. 📰 daily-cross-inspire — 每日跨领域灵感推送
+### 4. 📰 daily-cross-inspire — 每日跨界灵感早报
 
 **功能预期**  
-每日自动从多个 RSS 源采集内容，经 AI 摘要与筛选后，通过飞书/钉钉/邮件推送给用户，实现跨领域信息摄入与灵感激发。支持周报汇总和"历史上的今天"功能。
+每日自动从 15 个不同学科领域的 RSS 源采集内容，经 AI 摘要翻译后，通过飞书/钉钉/邮件推送。核心目标是打破信息茧房，让用户每天接触完全陌生的领域。支持偏好自适应、茧房检测、情绪追踪、知识星系图可视化、AI 对话管家等智能功能。
 
 **实现方案**  
-- **技术栈**: Python + feedparser(RSS) + BeautifulSoup(网页解析) + AI 摘要 + YAML 配置
-- **管线**: RSSCollector → DomainSelector → AISummarizer → Composer → Pusher(飞书/钉钉/邮件)
-- **部署**: Docker 容器化，适合 cron 定时运行
+- **技术栈**: Python + feedparser(RSS) + DeepSeek(AI) + FastAPI(对话API) + D3.js(星系图) + SQLite
+- **管线**: RSSCollector → DomainSelector(偏好加权) → AISummarizer → Composer → Pusher(飞书/钉钉/邮件)
+- **v3.0 新功能**: AI 对话管家(上下文记忆)、D3.js 知识星系图、茧房检测+情绪追踪
+- **部署**: GitHub Actions 每日定时 + Docker 容器化
 
-**开发进度** ████████░░ 80%  
-采集→筛选→摘要→推送完整链路已实现，Dockerfile 就绪，支持多推送渠道。待完善：更多信源模板、Web 管理界面。
+**开发进度** █████████░ 95%  
+完整链路已实现并稳定运行。v1.0 基础推送 → v2.0 偏好引擎+深潜+标签+主题月 → v3.0 对话管家+星系图+茧房检测。待完善：AI 辩论赛、自愈式 RSS 网络。
 
 ---
 
 ### 5. 🍔 foodie_comparison — 外卖比价优惠券助手
 
 **功能预期**  
-跨平台(美团/饿了么/京东外卖/抖音外卖)外卖比价与优惠券聚合小程序。支持同商品多平台价格对比、优惠后总价计算、智能推荐、红包聚合展示与自动领取。
+跨平台(美团/饿了么/京东外卖/抖音外卖)外卖比价与优惠券聚合应用。支持同商品多平台价格对比、优惠后总价计算、智能推荐、红包聚合展示、外卖截图OCR识别。
 
 **实现方案**  
-- **前端**: Flutter 3.x + Provider(状态管理) + Dio(网络) + GoRouter(路由)
-- **后端**: Python FastAPI + SQLAlchemy 2.0 + PostgreSQL + Redis + Celery
-- **数据采集**: Playwright(网页抓取) + PaddleOCR(截图识别)
-- **部署**: Docker Compose
+- **前端**: Flutter 3.x + Provider(状态管理) + Dio(网络) — 5 页面 / 6 卡片组件 / 4 Provider
+- **后端**: Python FastAPI + SQLAlchemy 2.0 + PostgreSQL + Redis + Celery — 7 路由 / 5 服务 / 14 数据表
+- **数据采集**: Playwright(4平台爬虫) + PaddleOCR(截图识别) + 代理池 + 多级降级策略
+- **API Client**: MeituanAPIClient / ElemeAPIClient 封装（签名算法 + 业务方法）
+- **推荐引擎**: 内容推荐 + 价格感知排序 + 冷启动兜底
+- **测试**: 116 个后端测试用例 + Flutter 单元/Widget 测试
 
-**开发进度** ███░░░░░░░ 30%  
-完整实现计划文档已编写，Flutter 与后端项目骨架已初始化。待实现：核心比价逻辑、各平台数据采集、前端 UI。
+**版本迭代**  
+- v0.4.0 (2026-05-27) — 数据链路打通：采集器混合调度、首页API上线、Flutter API对接、数据监控面板
+- v0.3.0 (2026-05-26) — OCR服务、比价引擎、推荐引擎、Celery定时任务
+- v0.2.0 (2026-05-25) — JWT认证、4平台采集器、代理池、Playwright反爬
+- v0.1.0 (2026-05-22) — 项目初始化、FastAPI/Flutter骨架、Docker环境
+
+**开发进度** ███████░░░ 70%  
+核心闭环已完成：认证 → 数据采集 → 比价/推荐引擎 → API → Flutter展示。种子数据已扩展至30店铺/113商品。待完成：真实平台API接入、爬虫链路联调、生产部署。
 
 ---
 
@@ -125,7 +134,24 @@
 
 ---
 
-### 9. 👔 wardrobe-stylist — 智能衣橱穿搭助手
+### 9. 🎤 my-interview-coach — 个人求职智能助手
+
+**功能预期**
+基于 AI 的个人求职面试练习系统。上传简历自动构建数字分身，模拟真实面试对话。支持面试官/本人双模式自由切换，中途纠正 AI 回答，一键保存为面试卡片。三层知识架构：文档 RAG → 结构化档案 → 话题卡片。
+
+**实现方案**
+- **技术栈**: Next.js 16 + TypeScript + Tailwind CSS + DeepSeek API + SQLite(better-sqlite3) + Zustand
+- **AI**: DeepSeek-V4-Pro (对话生成) + Xenova/all-MiniLM-L6-v2 (本地嵌入, 384维)
+- **文档解析**: pdf-parse + mammoth (PDF/Word/MD/TXT)
+- **核心模块**: Agentic 档案引擎 (深度解析+合并+纠正) + 统一对话端点 (双模式切换) + RAG 混合检索 (语义+关键词fallback)
+- **API**: 22 条路由 (知识库/卡片/对话/设置)
+
+**开发进度** █████████░ 90%
+核心闭环已完成：文档上传 → 档案解析 → 数字分身对话 → 双模式切换 → 纠正 → 保存卡片。待完善：流式对话输出、自我进化（纠正反哺档案）。
+
+---
+
+### 10. 👔 wardrobe-stylist — 智能衣橱穿搭助手
 
 **功能预期**  
 本地优先的个人衣橱管理与 AI 穿搭推荐桌面应用。支持拍照上传服装、AI 自动打标签识别属性、基于颜色理论与大模型的搭配推荐、虚拟试穿预览、穿搭日历记录、旅行打包方案生成。
@@ -142,6 +168,24 @@
 
 ---
 
+### 11. 🌱 thinkgarden — AI 知识框架引擎
+
+**功能预期**
+一款 AI 驱动的知识框架桌面应用。以水平树形思维导图为核心，AI 自动分析、归位、发散个人实践经验。支持 AI 对话式建框架，随手记录经验 AI 自动归位，对话记录中提取知识节点，AI 巡检框架健康度，实践前针对性提醒。
+
+**实现方案**
+- **技术栈**: Electron 35 + Next.js 15 (SSG) + React 18 + TypeScript + Tailwind CSS + sql.js
+- **思维导图**: @xyflow/react v12 (ReactFlow)，递归水平树布局算法，6 种节点类型
+- **AI**: OpenAI 兼容协议，支持 7 家厂商（DeepSeek/OpenAI/智谱/Moonshot/通义千问/豆包/Ollama）
+- **数据库**: sql.js（纯 JS SQLite），7 张表，全量 JSON 导入导出
+- **导出**: Markdown / Mermaid 流程图 / JSON 全量备份
+- **桌面集成**: 无边框窗口、自定义标题栏、app:// 自定义协议、剪贴板智能监听
+
+**开发进度** █████████░ 90%  
+核心闭环已完成：AI 建框架 → 经验归位 → 对话摘要 → 巡检 → 实践提醒 → 快照/导出。支持 7 家 AI 厂商，桌面快捷方式可用。待完善：节点拖拽排序、主题系统、云端同步。
+
+---
+
 ## 📊 总览
 
 | 项目 | 类型 | 技术栈 | 进度 |
@@ -149,13 +193,15 @@
 | asquant | 量化交易 | Python/FastAPI + React | ████████░░ 80% |
 | calendar-widget | 桌面工具 | Electron + React | ████████░░ 85% |
 | clip-magic | AI 视频处理 | Python + Whisper + LLM | ████████░░ 80% |
-| daily-cross-inspire | 信息推送 | Python + RSS + AI | ████████░░ 80% |
-| foodie_comparison | 移动应用 | Flutter + FastAPI | ███░░░░░░░ 30% |
+| daily-cross-inspire | 信息推送 | Python + RSS + AI + D3.js | █████████░ 95% |
+| foodie_comparison | 移动应用 | Flutter + FastAPI | ███████░░░ 70% |
 | mood-radio | 桌面/Web 应用 | Next.js + Electron | ████░░░░░░ 40% |
 | scripts | 工具箱 | Python/OpenCV/PIL | ██████████ 95% |
 | wechat-doppelganger | 自动化助手 | Python + OCR + UIA | ███░░░░░░░ 25% |
+| my-interview-coach | Web 应用 | Next.js + DeepSeek + SQLite | █████████░ 90% |
 | wardrobe-stylist | 桌面应用 | Electron + React + AI | ████████░░ 80% |
+| thinkgarden | 桌面应用 | Electron + Next.js + sql.js + AI | █████████░ 90% |
 
 ---
 
-*最后更新: 2026-05-26*
+*最后更新: 2026-05-28*

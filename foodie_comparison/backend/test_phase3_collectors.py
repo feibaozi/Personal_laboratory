@@ -63,17 +63,17 @@ class TestBaseCollector:
 
         collector = BaseCollector()
 
-        with pytest.raises(NotImplementedError):
-            asyncio.run(collector.collect_shops({}))
+        result = asyncio.run(collector.collect_shops({}))
+        assert result.success is False
 
-        with pytest.raises(NotImplementedError):
-            asyncio.run(collector.collect_products("123"))
+        result = asyncio.run(collector.collect_products("123"))
+        assert result.success is False
 
-        with pytest.raises(NotImplementedError):
-            asyncio.run(collector.collect_price("123"))
+        result = asyncio.run(collector.collect_price("123"))
+        assert result.success is False
 
-        with pytest.raises(NotImplementedError):
-            asyncio.run(collector.collect_coupons())
+        result = asyncio.run(collector.collect_coupons())
+        assert result.success is False
 
 
 SHOP_HTML = """

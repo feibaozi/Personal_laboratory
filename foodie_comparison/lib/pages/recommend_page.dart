@@ -95,21 +95,23 @@ class _RecommendPageState extends State<RecommendPage>
     final savings = (shop['savings'] ?? 0).toDouble();
     final isColdStart = shop['is_cold_start'] == true;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.08),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
+    return InkWell(
+      onTap: () => _showShopDetail(shop),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -193,7 +195,87 @@ class _RecommendPageState extends State<RecommendPage>
           ],
         ],
       ),
+      ),
     );
+  }
+
+  void _showShopDetail(Map<String, dynamic> shop) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  shop['shop_name'] ?? '',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                if (shop['is_cold_start'] == true)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text('热门', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildDetailRow('分类', shop['category'] ?? ''),
+            _buildDetailRow('评分', (shop['rating'] ?? 0).toDouble().toStringAsFixed(1)),
+            _buildDetailRow('推荐理由', shop['reason'] ?? ''),
+            if ((shop['savings'] ?? 0).toDouble() > 0)
+              _buildDetailRow('跨平台省', '¥${(shop['savings'] ?? 0).toDouble().toStringAsFixed(1)}'),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _searchProduct(shop['shop_name'] ?? '');
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+                    child: const Text('去比价'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('知道了'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 60, child: Text(label, style: const TextStyle(color: AppTheme.textSecondary))),
+          const SizedBox(width: 12),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  void _searchProduct(String keyword) {
+    Navigator.pop(context);
   }
 
   Widget _buildProductList(RecommendProvider provider) {
@@ -225,19 +307,21 @@ class _RecommendPageState extends State<RecommendPage>
     final category = product['category'] ?? '';
     final reason = product['reason'] ?? '';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.08),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
+    return InkWell(
+      onTap: () => _showProductDetail(product),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,6 +353,53 @@ class _RecommendPageState extends State<RecommendPage>
               style: const TextStyle(color: AppTheme.primaryColor, fontSize: 11),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+      ),
+    );
+  }
+
+  void _showProductDetail(Map<String, dynamic> product) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              product['product_name'] ?? '',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            _buildDetailRow('分类', product['category'] ?? ''),
+            _buildDetailRow('推荐理由', product['reason'] ?? ''),
+            if ((product['savings'] ?? 0).toDouble() > 0)
+              _buildDetailRow('可省', '¥${(product['savings'] ?? 0).toDouble().toStringAsFixed(1)}'),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _searchProduct(product['product_name'] ?? '');
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+                    child: const Text('去比价'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('知道了'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

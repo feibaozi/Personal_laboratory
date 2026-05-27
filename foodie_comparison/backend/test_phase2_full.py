@@ -10,7 +10,7 @@ import urllib.request, urllib.error
 import uvicorn
 from app.main import app
 
-PORT = 8765
+PORT = 8766
 BASE = f"http://127.0.0.1:{PORT}"
 
 

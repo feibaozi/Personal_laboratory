@@ -35,19 +35,26 @@ class HomeProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final results = await Future.wait([
-        _api.get('/api/coupons/home', params: {'platform': _selectedPlatform}),
-        _api.get('/api/recommend/shops', params: {'platform': _selectedPlatform}),
-        _api.get('/api/compare/saving-rank', params: {'platform': _selectedPlatform}),
-        _api.get('/api/platform/activities', params: {'platform': _selectedPlatform}),
-        _api.get('/api/platform/flash-sale', params: {'platform': _selectedPlatform}),
-      ]);
+      final params = {'platform': _selectedPlatform};
 
-      _coupons = List<Map<String, dynamic>>.from(results[0].data);
-      _shops = List<Map<String, dynamic>>.from(results[1].data);
-      _savingRank = List<Map<String, dynamic>>.from(results[2].data);
-      _activities = List<Map<String, dynamic>>.from(results[3].data);
-      _flashSale = results[4].data;
+      final couponsRes = await _api.get('/api/coupons/home', params: params);
+      _coupons = List<Map<String, dynamic>>.from(couponsRes.data['coupons'] ?? []);
+
+      final shopsRes = await _api.get('/api/recommend/shops', params: {
+        'platform': _selectedPlatform,
+        'limit': 10,
+      });
+      _shops = List<Map<String, dynamic>>.from(shopsRes.data['shops'] ?? []);
+
+      final rankRes = await _api.get('/api/compare/saving-rank', params: params);
+      _savingRank = List<Map<String, dynamic>>.from(rankRes.data['items'] ?? []);
+
+      final activitiesRes = await _api.get('/api/platform/activities', params: params);
+      _activities = List<Map<String, dynamic>>.from(activitiesRes.data['activities'] ?? []);
+
+      final flashRes = await _api.get('/api/platform/flash-sale', params: params);
+      final sales = List<Map<String, dynamic>>.from(flashRes.data['sales'] ?? []);
+      _flashSale = sales.isNotEmpty ? sales.first : null;
     } catch (e) {
       _error = e.toString();
     } finally {

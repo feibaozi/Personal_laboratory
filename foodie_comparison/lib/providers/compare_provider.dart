@@ -37,7 +37,7 @@ class CompareProvider extends ChangeNotifier {
 
     try {
       List<String> platforms = _selectedPlatform == 'all'
-          ? ['meituan', 'eleme', 'jd_waimai', 'douyin_waimai']
+          ? ['meituan', 'eleme', 'jd', 'douyin']
           : [_selectedPlatform];
 
       final response = await _api.post('/api/compare/product', data: {

@@ -85,7 +85,7 @@ def sync_platform_activities_for_platform(self, platform: str):
         )
         return {"platform": platform, "deactivated": len(expired_activities)}
     except Exception as e:
-        logger.error("Platform activity sync failed: %s", e)
+        logger.error("Platform activity sync failed for %s: %s", platform, e)
         raise self.retry(exc=e)
     finally:
         db.close()

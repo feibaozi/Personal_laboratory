@@ -363,7 +363,7 @@ class TestPhase4And5Integration:
         import uvicorn
         from app.main import app
 
-        port = 8011
+        port = 8012
         url = f"http://127.0.0.1:{port}"
 
         config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error")

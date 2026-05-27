@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 PLATFORM_NAMES = {
     "meituan": "美团",
     "eleme": "饿了么",
+    "jd": "京东外卖",
     "jd_waimai": "京东外卖",
+    "douyin": "抖音外卖",
     "douyin_waimai": "抖音外卖",
 }
 

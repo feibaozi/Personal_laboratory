@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "DEBUG"
     api_port: int = 8000
-    cors_origins: list = ["http://localhost:3000", "http://localhost:8080"]
+    cors_origins: list = ["*"]
 
     # Collectors
     collector_rate_limit: int = 2
@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     # OCR
     ocr_confidence_threshold: float = 0.85
     ocr_use_gpu: bool = False
+
+    meituan_api_key: str = ""
+    meituan_api_secret: str = ""
+    eleme_api_key: str = ""
+    eleme_api_secret: str = ""
+    jd_api_key: str = ""
+    jd_api_secret: str = ""
+    douyin_api_key: str = ""
+    douyin_api_secret: str = ""
 
     model_config = {"env_prefix": "", "case_sensitive": False}
 

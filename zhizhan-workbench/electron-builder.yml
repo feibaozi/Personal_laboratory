@@ -1,0 +1,21 @@
+appId: com.zhizhan.workbench
+productName: 智研工作台
+directories:
+  output: release
+files:
+  - dist-electron/**/*
+  - out/**/*
+  - python-backend/**/*
+  - data/**/*
+extraResources:
+  - from: python-backend
+    to: python-backend
+win:
+  target: nsis
+  icon: public/icon.ico
+mac:
+  target: dmg
+  icon: public/icon.icns
+linux:
+  target: AppImage
+  icon: public/icon.png

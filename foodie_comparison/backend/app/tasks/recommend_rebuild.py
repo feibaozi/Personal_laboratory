@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from app.celery_app import celery_app
 from app.database import get_sync_db
@@ -7,6 +8,21 @@ from app.models.recommend import RecommendResult
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
+
+
+async def _rebuild_for_user_async(user_id: int):
+    from app.database import _get_async_session_local
+    from app.services.recommend_service import RecommendService
+
+    session_local = _get_async_session_local()
+    async with session_local() as db:
+        try:
+            service = RecommendService(db)
+            items = await service.recommend_shops(user_id, limit=10)
+            return {"user_id": user_id, "status": "completed", "items_count": len(items)}
+        except Exception as e:
+            logger.error("Async recommend rebuild failed for user %d: %s", user_id, str(e))
+            return {"user_id": user_id, "status": "failed", "error": str(e)}
 
 
 @celery_app.task(
@@ -37,22 +53,15 @@ def rebuild_recommendations(self):
                 ).seconds < 43200:
                     continue
 
-                result = RecommendResult(
-                    user_id=user.id,
-                    recommend_type="shop",
-                    items=[],
-                    algorithm_version="v1.0",
-                    generated_at=datetime.utcnow(),
-                )
-                db.add(result)
-                built_count += 1
+                result = asyncio.run(_rebuild_for_user_async(user.id))
+                if result.get("status") == "completed":
+                    built_count += 1
             except Exception as e:
                 logger.error(
                     "Recommend rebuild failed for user %d: %s",
                     user.id, str(e),
                 )
 
-        db.commit()
         logger.info("Recommend rebuild: %d users processed", built_count)
         return {"built": built_count}
     except Exception as e:
@@ -68,22 +77,16 @@ def rebuild_recommendations(self):
     max_retries=1,
 )
 def rebuild_for_user(self, user_id: int):
-    db_gen = get_sync_db()
-    db = next(db_gen)
     try:
-        result = RecommendResult(
-            user_id=user_id,
-            recommend_type="shop",
-            items=[],
-            algorithm_version="v1.0",
-            generated_at=datetime.utcnow(),
-        )
-        db.add(result)
-        db.commit()
-        logger.info("Recommend rebuild for user %d completed", user_id)
-        return {"user_id": user_id, "status": "completed"}
+        result = asyncio.run(_rebuild_for_user_async(user_id))
+        if result.get("status") == "completed":
+            logger.info("Recommend rebuild for user %d completed", user_id)
+        else:
+            logger.error(
+                "Recommend rebuild for user %d failed: %s",
+                user_id, result.get("error", "unknown"),
+            )
+        return result
     except Exception as e:
         logger.error("Recommend rebuild for user %d failed: %s", user_id, e)
         raise self.retry(exc=e)
-    finally:
-        db.close()

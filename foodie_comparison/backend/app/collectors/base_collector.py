@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Optional
 from datetime import datetime, timezone
+from enum import Enum
 
 import httpx
 from bs4 import BeautifulSoup
@@ -11,6 +12,14 @@ from bs4 import BeautifulSoup
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class CollectionStrategy(str, Enum):
+    API = "api"
+    CRAWLER = "crawler"
+    CACHE = "cache"
+    OCR = "ocr"
+    MANUAL = "manual"
 
 
 class CollectionResult:
@@ -39,6 +48,7 @@ class CollectionResult:
 class BaseCollector:
     platform: str = ""
     base_url: str = ""
+    strategy_order: list[str] = ["api", "crawler", "cache"]
 
     def __init__(self):
         self._request_count = 0
@@ -46,6 +56,7 @@ class BaseCollector:
         self._browser = None
         self._context = None
         self._playwright = None
+        self._api_client = None
 
     async def _rate_limit(self):
         now = time.time()
@@ -163,17 +174,51 @@ class BaseCollector:
             await self._playwright.__aexit__(None, None, None)
             self._playwright = None
 
+    async def collect_with_fallback(
+        self, method: str, **kwargs
+    ) -> CollectionResult:
+        for strategy in self.strategy_order:
+            try:
+                handler = getattr(self, f"_collect_{method}_{strategy}", None)
+                if handler is None:
+                    continue
+                result = await handler(**kwargs)
+                if result and result.success:
+                    result.source = strategy
+                    logger.info(
+                        "%s %s via %s succeeded",
+                        self.platform, method, strategy,
+                    )
+                    return result
+            except Exception as e:
+                logger.warning(
+                    "%s %s via %s failed: %s",
+                    self.platform, method, strategy, e,
+                )
+                continue
+
+        return CollectionResult(
+            success=False,
+            data={
+                "platform": self.platform,
+                "manual_entry_required": True,
+                "message": "所有采集方式均失败，请手动提交链接或使用截图OCR",
+                "support_methods": ["link_submit", "screenshot_ocr"],
+            },
+            error="all_strategies_failed",
+        )
+
     async def collect_shops(self, location: dict) -> CollectionResult:
-        raise NotImplementedError
+        return await self.collect_with_fallback("shops", location=location)
 
     async def collect_products(self, shop_id: str) -> CollectionResult:
-        raise NotImplementedError
+        return await self.collect_with_fallback("products", shop_id=shop_id)
 
     async def collect_price(self, product_id: str) -> CollectionResult:
-        raise NotImplementedError
+        return await self.collect_with_fallback("price", product_id=product_id)
 
     async def collect_coupons(self) -> CollectionResult:
-        raise NotImplementedError
+        return await self.collect_with_fallback("coupons")
 
     async def health_check(self) -> bool:
         try:

@@ -1,8 +1,6 @@
 import json
 import re
 import logging
-from datetime import datetime
-from typing import Optional
 
 from bs4 import BeautifulSoup
 
@@ -14,6 +12,7 @@ logger = logging.getLogger(__name__)
 class MeituanCollector(BaseCollector):
     platform = "meituan"
     base_url = "https://i.meituan.com"
+    strategy_order = ["crawler", "cache"]
 
     def __init__(self):
         super().__init__()
@@ -238,33 +237,135 @@ class MeituanCollector(BaseCollector):
             error=error,
         )
 
-    async def collect_shops(self, location: dict) -> CollectionResult:
+    async def _collect_shops_crawler(self, location: dict) -> CollectionResult:
+        keyword = location.get("keyword", "")
+        if not keyword:
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": "缺少搜索关键词"},
+                error="missing_keyword",
+            )
+        url = f"https://i.meituan.com/meishi/api/poi/search?keyword={keyword}"
+        html = await self._page_request(url, wait_ms=3000)
+        try:
+            data = json.loads(html)
+            shops = []
+            items = (
+                data.get("data", {}).get("poiList")
+                or data.get("data", {}).get("list")
+                or []
+            )
+            for item in items:
+                shops.append({
+                    "shop_id": str(item.get("id", "")),
+                    "name": item.get("name", item.get("title", "")),
+                    "rating": item.get("avgScore", item.get("rating", 0.0)),
+                    "category": item.get("categoryName", item.get("category", "")),
+                    "address": item.get("address", ""),
+                })
+            if shops:
+                return CollectionResult(
+                    success=True,
+                    data={"platform": self.platform, "shops": shops, "keyword": keyword},
+                    source="crawler",
+                )
+        except (json.JSONDecodeError, KeyError, TypeError):
+            pass
+        soup = await self._parse_page(html)
+        shops = []
+        shop_els = soup.select('[class*="poi"], [class*="shop"], [class*="restaurant"]')
+        for el in shop_els[:20]:
+            name_el = el.select_one('[class*="name"], [class*="title"]')
+            shops.append({
+                "shop_id": "",
+                "name": name_el.text.strip() if name_el else "",
+                "rating": 0.0,
+                "category": "",
+                "address": "",
+            })
+        if shops:
+            return CollectionResult(
+                success=True,
+                data={"platform": self.platform, "shops": shops, "keyword": keyword},
+                source="crawler",
+            )
         return CollectionResult(
             success=False,
-            data={
-                "platform": "meituan",
-                "message": "店铺搜索需通过用户提交链接或已知店铺列表",
-            },
+            data={"platform": self.platform, "message": "未找到店铺"},
+            error="no_shops_found",
         )
 
-    async def collect_products(self, shop_id: str) -> CollectionResult:
-        url = f"{self.base_url}/catering/dish/detail?shopId={shop_id}"
+    async def _collect_products_crawler(self, shop_id: str) -> CollectionResult:
+        url = f"https://i.meituan.com/catering/dish/detail?shopId={shop_id}"
         return await self.collect_shop_menu(url)
 
-    async def collect_price(self, product_id: str) -> CollectionResult:
+    async def _collect_price_crawler(self, product_id: str) -> CollectionResult:
         return CollectionResult(
             success=False,
-            data={
-                "platform": "meituan",
-                "message": "价格信息需通过采集店铺菜单获取",
-            },
+            data={"platform": self.platform, "product_id": product_id, "message": "价格需通过店铺菜单获取"},
+            error="price_requires_shop_menu",
         )
 
-    async def collect_coupons(self) -> CollectionResult:
+    async def _collect_coupons_crawler(self) -> CollectionResult:
+        try:
+            html = await self._page_request(self.base_url, wait_ms=3000)
+            soup = await self._parse_page(html)
+            coupons = self._parse_coupons(soup)
+            if coupons:
+                return CollectionResult(
+                    success=True,
+                    data={"platform": self.platform, "coupons": coupons},
+                    source="crawler",
+                )
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": "未找到优惠券"},
+                error="no_coupons_found",
+            )
+        except Exception as e:
+            logger.error("Meituan coupons crawler failed: %s", e)
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": f"优惠券采集失败: {e}"},
+                error=str(e),
+            )
+
+    async def _collect_shops_cache(self, location: dict) -> CollectionResult:
         return CollectionResult(
             success=False,
-            data={
-                "platform": "meituan",
-                "message": "优惠券信息需通过用户登录态采集",
-            },
+            data={"platform": self.platform, "message": "缓存未命中"},
+            error="cache_miss",
         )
+
+    async def _collect_products_cache(self, shop_id: str) -> CollectionResult:
+        return CollectionResult(
+            success=False,
+            data={"platform": self.platform, "message": "缓存未命中"},
+            error="cache_miss",
+        )
+
+    async def _collect_price_cache(self, product_id: str) -> CollectionResult:
+        return CollectionResult(
+            success=False,
+            data={"platform": self.platform, "message": "缓存未命中"},
+            error="cache_miss",
+        )
+
+    async def _collect_coupons_cache(self) -> CollectionResult:
+        return CollectionResult(
+            success=False,
+            data={"platform": self.platform, "message": "缓存未命中"},
+            error="cache_miss",
+        )
+
+    async def collect_shops(self, location: dict) -> CollectionResult:
+        return await self.collect_with_fallback("shops", location=location)
+
+    async def collect_products(self, shop_id: str) -> CollectionResult:
+        return await self.collect_with_fallback("products", shop_id=shop_id)
+
+    async def collect_price(self, product_id: str) -> CollectionResult:
+        return await self.collect_with_fallback("price", product_id=product_id)
+
+    async def collect_coupons(self) -> CollectionResult:
+        return await self.collect_with_fallback("coupons")

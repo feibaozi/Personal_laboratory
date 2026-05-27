@@ -16,8 +16,8 @@ class _ComparePageState extends State<ComparePage> {
     {'key': 'all', 'name': '全部'},
     {'key': 'meituan', 'name': '美团'},
     {'key': 'eleme', 'name': '饿了么'},
-    {'key': 'jd_waimai', 'name': '京东外卖'},
-    {'key': 'douyin_waimai', 'name': '抖音外卖'},
+    {'key': 'jd', 'name': '京东外卖'},
+    {'key': 'douyin', 'name': '抖音外卖'},
   ];
 
   @override
@@ -178,17 +178,19 @@ class _ComparePageState extends State<ComparePage> {
     final deliveryFee = (item['delivery_fee'] ?? 0).toDouble();
     final isBestPrice = item['is_best_price'] == true;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isBestPrice ? const Color(0xFFFFF5F5) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: isBestPrice
-            ? Border.all(color: AppTheme.primaryColor.withOpacity(0.3))
-            : null,
-      ),
-      child: Row(
+    return InkWell(
+      onTap: () => _showPlatformDetail(item),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isBestPrice ? const Color(0xFFFFF5F5) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: isBestPrice
+              ? Border.all(color: AppTheme.primaryColor.withOpacity(0.3))
+              : null,
+        ),
+        child: Row(
         children: [
           Expanded(
             child: Column(
@@ -256,7 +258,78 @@ class _ComparePageState extends State<ComparePage> {
           ),
         ],
       ),
+      ),
     );
+  }
+
+  void _showPlatformDetail(Map<String, dynamic> item) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  item['platform_name'] ?? item['platform'] ?? '',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                if (item['is_best_price'] == true)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      '最低价',
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildDetailRow('菜品', item['product_name'] ?? ''),
+            _buildDetailRow('店铺', item['shop_name'] ?? ''),
+            _buildDetailRow('原价', '¥${(item['original_total'] ?? 0).toDouble().toStringAsFixed(2)}'),
+            _buildDetailRow('优惠', '¥${(item['total_discount'] ?? 0).toDouble().toStringAsFixed(2)}'),
+            _buildDetailRow('配送费', '¥${(item['delivery_fee'] ?? 0).toDouble().toStringAsFixed(2)}'),
+            _buildDetailRow('最终价', '¥${(item['final_price'] ?? 0).toDouble().toStringAsFixed(2)}', isPrice: true),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+                child: const Text('知道了'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {bool isPrice = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(width: 60, child: Text(label, style: const TextStyle(color: AppTheme.textSecondary))),
+          const SizedBox(width: 12),
+          Text(value, style: isPrice ? const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.primaryColor) : null),
+        ],
+      ),
+    );
+  }
+
+  void _searchProduct(String productName) {
+    _searchController.text = productName;
+    _doSearch();
   }
 
   Widget _buildSavingRank(CompareProvider provider) {
@@ -316,7 +389,9 @@ class _ComparePageState extends State<ComparePage> {
     final savings = (item['savings'] ?? 0).toDouble();
     final lowestPlatformName = item['lowest_platform_name'] ?? '';
 
-    return Container(
+    return InkWell(
+      onTap: () => _searchProduct(productName),
+      child: Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.2))),
@@ -364,6 +439,7 @@ class _ComparePageState extends State<ComparePage> {
             ],
           ),
         ],
+      ),
       ),
     );
   }

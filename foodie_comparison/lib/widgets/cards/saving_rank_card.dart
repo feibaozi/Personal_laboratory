@@ -104,6 +104,12 @@ class SavingRankCard extends StatelessWidget {
               width: 60,
               height: 60,
               fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 60,
+                height: 60,
+                color: const Color(0xFFFFE0E0),
+                child: const Icon(Icons.fastfood, color: Color(0xFFFF6B6B), size: 24),
+              ),
             ),
           ),
           const SizedBox(width: 12),

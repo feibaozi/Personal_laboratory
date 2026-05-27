@@ -77,6 +77,11 @@ class RecommendCard extends StatelessWidget {
               height: 100,
               width: double.infinity,
               fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                height: 100,
+                color: const Color(0xFFFFE0E0),
+                child: const Icon(Icons.restaurant, color: Color(0xFFFF6B6B), size: 32),
+              ),
             ),
           ),
           Padding(
