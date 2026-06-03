@@ -17,6 +17,9 @@ class Base(DeclarativeBase):
 
 
 async def init_db():
+    from pathlib import Path
+    db_path = Path(settings.DB_PATH)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("PRAGMA journal_mode=WAL"))

@@ -8,6 +8,7 @@ from ..models.factor import FactorDefinition, FactorValue
 from ..models.market import Stock, DailyQuote
 from ..engine.factor_computer import FactorComputer, save_factor_values
 from ..engine.factor_backtester import FactorBacktester
+from ..services.factor_analysis_service import FactorAnalyzer
 
 router = APIRouter(prefix="/api/v1/factor", tags=["factor"])
 
@@ -15,6 +16,16 @@ router = APIRouter(prefix="/api/v1/factor", tags=["factor"])
 async def _codes_with_data(db: AsyncSession) -> list[str]:
     r = await db.execute(select(DailyQuote.stock_code).distinct())
     return [row[0] for row in r.all()]
+
+
+async def _latest_trade_date(db: AsyncSession, before: date | None = None) -> date | None:
+    q = select(DailyQuote.trade_date).distinct()
+    if before:
+        q = q.where(DailyQuote.trade_date <= before)
+    q = q.order_by(DailyQuote.trade_date.desc()).limit(1)
+    r = await db.execute(q)
+    row = r.first()
+    return row[0] if row else None
 
 
 @router.get("/library")
@@ -28,6 +39,12 @@ async def factor_library(db: AsyncSession = Depends(get_db)):
             "is_builtin": f.is_builtin,
         })
     return {"factors": factors}
+
+
+@router.get("/latest-date")
+async def latest_trade_date(db: AsyncSession = Depends(get_db)):
+    d = await _latest_trade_date(db)
+    return {"date": d.isoformat() if d else None}
 
 
 @router.post("/compute")
@@ -120,13 +137,18 @@ async def factor_screen(
     db: AsyncSession = Depends(get_db),
 ):
     conditions = body.get("conditions", [])
-    target_date = date.fromisoformat(body["date"])
+    target_date_str = body["date"]
     universe = body.get("universe")
     top_n = body.get("top_n", 50)
 
     codes_result = await db.execute(select(Stock.code))
     all_codes = [r[0] for r in codes_result.all()]
     codes_with_data = set(await _codes_with_data(db))
+
+    target_date = date.fromisoformat(target_date_str)
+    actual_date = await _latest_trade_date(db, target_date)
+    if actual_date is None:
+        return {"results": [], "total": 0}
 
     computer = FactorComputer(db)
 
@@ -136,7 +158,7 @@ async def factor_screen(
         factor_name = condition["factor_name"]
         direction = condition.get("direction", "positive")
 
-        vals = await computer.compute_one(factor_name, list(codes_with_data)[:500], target_date)
+        vals = await computer.compute_one(factor_name, list(codes_with_data)[:500], actual_date)
 
         if not vals:
             continue
@@ -179,13 +201,18 @@ async def factor_correlation(
     if not all_codes:
         all_codes = [r[0] for r in (await db.execute(select(Stock.code).limit(500))).all()]
 
+    target_date = date.fromisoformat(date_str) if date_str else date.today()
+    actual_date = await _latest_trade_date(db, target_date)
+    if actual_date is None:
+        return {"correlation_matrix": [], "factor_names": factor_names}
+
     computer = FactorComputer(db)
-    d = date.fromisoformat(date_str)
     factor_data: dict[str, dict[str, float]] = {}
 
     for fname in factor_names:
-        vals = await computer.compute_one(fname, all_codes, d)
-        factor_data[fname] = vals
+        vals = await computer.compute_one(fname, all_codes, actual_date)
+        if vals:
+            factor_data[fname] = vals
 
     import numpy as np
     common_codes = None
@@ -195,22 +222,250 @@ async def factor_correlation(
         else:
             common_codes &= set(vals.keys())
 
-    if not common_codes or len(common_codes) < 3:
-        return {"correlation_matrix": [], "factor_names": factor_names}
+    if not common_codes or len(common_codes) < 2:
+        return {"correlation_matrix": [], "factor_names": list(factor_data.keys())}
 
-    n = len(factor_names)
+    names = list(factor_data.keys())
+    n = len(names)
     corr_matrix = [[0.0] * n for _ in range(n)]
     for i in range(n):
         for j in range(n):
             if i == j:
                 corr_matrix[i][j] = 1.0
                 continue
-            a = np.array([factor_data[factor_names[i]].get(c, np.nan) for c in common_codes])
-            b = np.array([factor_data[factor_names[j]].get(c, np.nan) for c in common_codes])
+            a = np.array([factor_data[names[i]].get(c, np.nan) for c in common_codes])
+            b = np.array([factor_data[names[j]].get(c, np.nan) for c in common_codes])
             mask = ~np.isnan(a) & ~np.isnan(b)
-            if mask.sum() >= 3:
-                corr_matrix[i][j] = float(np.corrcoef(a[mask], b[mask])[0, 1]) if mask.sum() > 2 else 0
+            if mask.sum() >= 2:
+                corr_matrix[i][j] = round(float(np.corrcoef(a[mask], b[mask])[0, 1]), 4)
             else:
-                corr_matrix[i][j] = 0
+                corr_matrix[i][j] = 0.0
 
-    return {"correlation_matrix": corr_matrix, "factor_names": factor_names}
+    return {"correlation_matrix": corr_matrix, "factor_names": names}
+
+
+@router.post("/ic-analysis")
+async def ic_analysis(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    factor_name = body.get("factor_name", "return_1m")
+    start_date = body.get("start_date")
+    end_date = body.get("end_date")
+    period = body.get("period", "monthly")
+    ic_type = body.get("ic_type", "rank")
+
+    all_codes = await _codes_with_data(db)
+    if not all_codes:
+        all_codes = [r[0] for r in (await db.execute(select(Stock.code).limit(500))).all()]
+
+    sd = date.fromisoformat(start_date)
+    ed = date.fromisoformat(end_date)
+    actual_ed = await _latest_trade_date(db, ed)
+    if actual_ed:
+        ed = actual_ed
+
+    analyzer = FactorAnalyzer(db)
+    result = await analyzer.compute_ic_analysis(
+        factor_name=factor_name,
+        stock_codes=all_codes,
+        start_date=sd,
+        end_date=ed,
+        period=period,
+        ic_type=ic_type,
+    )
+    return result
+
+
+@router.post("/decile-analysis")
+async def decile_analysis(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    factor_name = body.get("factor_name", "return_1m")
+    start_date = body.get("start_date")
+    end_date = body.get("end_date")
+    period = body.get("period", "monthly")
+    n_groups = body.get("n_groups", 10)
+
+    all_codes = await _codes_with_data(db)
+    if not all_codes:
+        all_codes = [r[0] for r in (await db.execute(select(Stock.code).limit(500))).all()]
+
+    sd = date.fromisoformat(start_date)
+    ed = date.fromisoformat(end_date)
+    actual_ed = await _latest_trade_date(db, ed)
+    if actual_ed:
+        ed = actual_ed
+
+    analyzer = FactorAnalyzer(db)
+    result = await analyzer.compute_decile_backtest(
+        factor_name=factor_name,
+        stock_codes=all_codes,
+        start_date=sd,
+        end_date=ed,
+        period=period,
+        n_groups=n_groups,
+    )
+    return result
+
+
+@router.post("/stats")
+async def factor_stats(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    factor_name = body.get("factor_name", "return_1m")
+    target_date_str = body.get("date")
+
+    all_codes = await _codes_with_data(db)
+    if not all_codes:
+        all_codes = [r[0] for r in (await db.execute(select(Stock.code).limit(500))).all()]
+
+    target_date = date.fromisoformat(target_date_str) if target_date_str else date.today()
+    actual_date = await _latest_trade_date(db, target_date)
+    if actual_date is None:
+        return {"coverage": 0, "n_stocks": 0}
+
+    analyzer = FactorAnalyzer(db)
+    result = await analyzer.compute_factor_stats(
+        factor_name=factor_name,
+        stock_codes=all_codes,
+        target_date=actual_date,
+    )
+    return result
+
+
+@router.post("/correlation-matrix")
+async def correlation_matrix(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    factor_names = body.get("factor_names", [])
+    target_date_str = body.get("date")
+
+    all_codes = await _codes_with_data(db)
+    if not all_codes:
+        all_codes = [r[0] for r in (await db.execute(select(Stock.code).limit(500))).all()]
+
+    target_date = date.fromisoformat(target_date_str) if target_date_str else date.today()
+    actual_date = await _latest_trade_date(db, target_date)
+    if actual_date is None:
+        return {"factor_names": factor_names, "matrix": []}
+
+    analyzer = FactorAnalyzer(db)
+    result = await analyzer.compute_correlation_matrix(
+        factor_names=factor_names,
+        stock_codes=all_codes,
+        target_date=actual_date,
+    )
+    result["actual_date"] = actual_date.isoformat()
+    return result
+
+
+@router.post("/batch-ic")
+async def batch_ic_analysis(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    start_date = body.get("start_date")
+    end_date = body.get("end_date")
+    period = body.get("period", "monthly")
+    ic_type = body.get("ic_type", "rank")
+    categories = body.get("categories")
+
+    all_codes = await _codes_with_data(db)
+    if not all_codes:
+        all_codes = [r[0] for r in (await db.execute(select(Stock.code).limit(500))).all()]
+
+    sd = date.fromisoformat(start_date)
+    ed = date.fromisoformat(end_date)
+    actual_ed = await _latest_trade_date(db, ed)
+    if actual_ed:
+        ed = actual_ed
+
+    analyzer = FactorAnalyzer(db)
+    results = await analyzer.batch_ic_analysis(
+        stock_codes=all_codes,
+        start_date=sd,
+        end_date=ed,
+        period=period,
+        ic_type=ic_type,
+        categories=categories,
+    )
+    return {"results": results, "total": len(results)}
+
+
+@router.post("/batch-decile")
+async def batch_decile_analysis(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    start_date = body.get("start_date")
+    end_date = body.get("end_date")
+    period = body.get("period", "monthly")
+    categories = body.get("categories")
+
+    all_codes = await _codes_with_data(db)
+    if not all_codes:
+        all_codes = [r[0] for r in (await db.execute(select(Stock.code).limit(500))).all()]
+
+    sd = date.fromisoformat(start_date)
+    ed = date.fromisoformat(end_date)
+    actual_ed = await _latest_trade_date(db, ed)
+    if actual_ed:
+        ed = actual_ed
+
+    analyzer = FactorAnalyzer(db)
+    results = await analyzer.batch_decile_backtest(
+        stock_codes=all_codes,
+        start_date=sd,
+        end_date=ed,
+        period=period,
+        categories=categories,
+    )
+    return {"results": results, "total": len(results)}
+
+
+@router.post("/redundant-factors")
+async def find_redundant_factors(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    target_date_str = body.get("date")
+    threshold = body.get("threshold", 0.8)
+    categories = body.get("categories")
+
+    all_codes = await _codes_with_data(db)
+    if not all_codes:
+        all_codes = [r[0] for r in (await db.execute(select(Stock.code).limit(500))).all()]
+
+    target_date = date.fromisoformat(target_date_str) if target_date_str else date.today()
+    actual_date = await _latest_trade_date(db, target_date)
+    if actual_date is None:
+        return {"redundant": []}
+
+    analyzer = FactorAnalyzer(db)
+    results = await analyzer.find_redundant_factors(
+        stock_codes=all_codes,
+        target_date=actual_date,
+        threshold=threshold,
+        categories=categories,
+    )
+    return {"redundant": results, "total": len(results)}
+
+
+@router.get("/categories")
+async def factor_categories():
+    from ..engine.factor_computer import _get_builtin_registry
+    registry = _get_builtin_registry()
+    cats = registry.categories()
+    result = []
+    for c in cats:
+        factors = registry.by_category(c)
+        result.append({
+            "category": c,
+            "count": len(factors),
+            "factors": [{"name": n, "description": f.description} for n, f in factors.items()],
+        })
+    return {"categories": result}

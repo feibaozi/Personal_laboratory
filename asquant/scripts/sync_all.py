@@ -1,8 +1,8 @@
-"""Quick data sync script — run from project root."""
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 import asyncio
 from app.database import async_session, init_db
+from app.models import *  # ensure all models registered with Base.metadata
 from app.services.seed import seed_factors
 from app.services.data_service import SyncManager
 
@@ -16,7 +16,7 @@ async def main():
         end = "2026-05-14"
         print(f"Syncing data from {start} to {end}...")
         results = await mgr.sync_selected(
-            ["stock_list", "indices"],
+            ["stock_list", "indices", "daily_quotes", "stock_info", "financial_reports"],
             start_date=start, end_date=end,
         )
         for r in results:

@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { path: "/factor", label: "因子研究", icon: "🔬" },
   { path: "/backtest", label: "组合回测", icon: "🎯" },
   { path: "/data", label: "数据管理", icon: "📦" },
+  { path: "/paper", label: "模拟交易", icon: "🎮" },
 ];
 
 export function Sidebar() {

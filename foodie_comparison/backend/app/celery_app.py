@@ -12,6 +12,7 @@ celery_app = Celery(
         "app.tasks.platform_sync",
         "app.tasks.recommend_rebuild",
         "app.tasks.cleanup",
+        "app.tasks.crawl_tasks",
     ],
 )
 

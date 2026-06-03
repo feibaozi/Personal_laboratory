@@ -1,14 +1,24 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
 import dayjs from "dayjs";
-import { fetchIndicesLatest, fetchIndexHistory, fetchSectorHeatmap, fetchNorthBound, fetchWatchlist, deleteWatchlist } from "@/api/market";
+import { fetchIndicesLatest, fetchIndexHistory, fetchSectorHeatmap, fetchNorthBound, fetchMarketBreadth, fetchWatchlist, deleteWatchlist, fetchStockProfile } from "@/api/market";
 import { MetricCard } from "@/components/common/MetricCard";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { usePolling } from "@/hooks/usePolling";
 
+const INDEX_OPTIONS = [
+  { code: "000300", name: "沪深300" },
+  { code: "000905", name: "中证500" },
+  { code: "000001", name: "上证指数" },
+  { code: "399006", name: "创业板指" },
+  { code: "000688", name: "科创50" },
+];
+
 export function DashboardPage() {
   const navigate = useNavigate();
+  const [selectedIndices, setSelectedIndices] = useState<string[]>(["000300", "000905"]);
 
   const indices = useQuery({ queryKey: ["indices-latest"], queryFn: fetchIndicesLatest });
   const sectors = useQuery({ queryKey: ["sectors-heatmap"], queryFn: fetchSectorHeatmap });
@@ -17,9 +27,24 @@ export function DashboardPage() {
     queryFn: () => fetchNorthBound(dayjs().subtract(60, "day").format("YYYY-MM-DD"), dayjs().format("YYYY-MM-DD")),
   });
   const watchlist = useQuery({ queryKey: ["watchlist"], queryFn: fetchWatchlist });
-  const indexHist = useQuery({
-    queryKey: ["index-history"],
-    queryFn: () => fetchIndexHistory("000300", dayjs().subtract(60, "day").format("YYYY-MM-DD"), dayjs().format("YYYY-MM-DD")),
+  const breadth = useQuery({
+    queryKey: ["market-breadth"],
+    queryFn: () => fetchMarketBreadth(dayjs().subtract(60, "day").format("YYYY-MM-DD"), dayjs().format("YYYY-MM-DD")),
+  });
+
+  // Multi-index comparison
+  const indexHistories = useQuery({
+    queryKey: ["index-histories", selectedIndices],
+    queryFn: async () => {
+      const results = await Promise.all(
+        selectedIndices.map(async (code) => {
+          const res = await fetchIndexHistory(code, dayjs().subtract(60, "day").format("YYYY-MM-DD"), dayjs().format("YYYY-MM-DD"));
+          return { code, data: res.data || [] };
+        })
+      );
+      return results;
+    },
+    enabled: selectedIndices.length > 0,
   });
 
   usePolling(() => { indices.refetch(); sectors.refetch(); watchlist.refetch(); }, 3000, 60000, true);
@@ -76,23 +101,43 @@ export function DashboardPage() {
   } : null;
 
   // 4. Multi-index comparison (normalized)
-  const compareOption = indexHist.data ? {
+  const indexColors = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#a78bfa"];
+  const compareOption = indexHistories.data && indexHistories.data.length > 0 ? {
     tooltip: { trigger: "axis" },
-    legend: { data: ["沪深300"], textStyle: { color: "#9ca3af" }, top: 0 },
+    legend: { data: indexHistories.data.map((h) => INDEX_OPTIONS.find((o) => o.code === h.code)?.name || h.code), textStyle: { color: "#9ca3af" }, top: 0 },
     grid: { left: 60, right: 20, top: 30, bottom: 30 },
-    xAxis: { type: "category", data: (indexHist.data.data as { date: string }[] || []).map((d) => d.date.slice(5)), axisLabel: { color: "#9ca3af" } },
+    xAxis: { type: "category", data: (() => {
+      const first = indexHistories.data[0];
+      return (first?.data as { date: string }[] || []).map((d) => d.date.slice(5));
+    })(), axisLabel: { color: "#9ca3af" } },
     yAxis: { type: "value", name: "归一化(100)", axisLabel: { color: "#9ca3af" } },
-    series: [{
-      name: "沪深300", type: "line", symbol: "none", smooth: true,
-      data: (() => {
-        const closes = (indexHist.data.data as { close: number }[] || []).map((d) => d.close);
-        if (closes.length === 0) return [];
-        const base = closes[0];
-        return closes.map((c: number) => ((c / base) * 100).toFixed(1));
-      })(),
-      lineStyle: { color: "#3b82f6" },
-      areaStyle: { color: "rgba(59,130,246,0.1)" },
-    }],
+    series: indexHistories.data.map((h, i) => {
+      const closes = (h.data as { close: number }[] || []).map((d) => d.close);
+      const base = closes[0] || 1;
+      return {
+        name: INDEX_OPTIONS.find((o) => o.code === h.code)?.name || h.code,
+        type: "line", symbol: "none", smooth: true,
+        data: closes.map((c: number) => ((c / base) * 100).toFixed(1)),
+        lineStyle: { color: indexColors[i % indexColors.length] },
+      };
+    }),
+  } : null;
+
+  // 5. Market breadth stacked bar chart
+  const breadthData = breadth.data || [];
+  const breadthOption = breadthData.length > 0 ? {
+    tooltip: { trigger: "axis" },
+    legend: { data: ["涨停", "涨", "平", "跌", "跌停"], textStyle: { color: "#9ca3af" }, top: 0 },
+    grid: { left: 50, right: 20, top: 30, bottom: 30 },
+    xAxis: { type: "category", data: breadthData.map((d) => d.date.slice(5)), axisLabel: { color: "#9ca3af" } },
+    yAxis: { type: "value", name: "股票数", axisLabel: { color: "#9ca3af" } },
+    series: [
+      { name: "涨停", type: "bar", stack: "total", data: breadthData.map((d) => d.limit_up || 0), itemStyle: { color: "#ef4444" } },
+      { name: "涨", type: "bar", stack: "total", data: breadthData.map((d) => d.up_count || 0), itemStyle: { color: "#f87171" } },
+      { name: "平", type: "bar", stack: "total", data: breadthData.map((d) => d.flat_count || 0), itemStyle: { color: "#9ca3af" } },
+      { name: "跌", type: "bar", stack: "total", data: breadthData.map((d) => d.down_count || 0), itemStyle: { color: "#4ade80" } },
+      { name: "跌停", type: "bar", stack: "total", data: breadthData.map((d) => d.limit_down || 0), itemStyle: { color: "#22c55e" } },
+    ],
   } : null;
 
   return (
@@ -137,6 +182,18 @@ export function DashboardPage() {
           ) : <p className="text-sm text-gray-500">暂无板块数据</p>}
         </section>
 
+        {/* Market Breadth */}
+        <section className="card">
+          <h2 className="text-sm font-bold text-slate-400 mb-3 flex items-center gap-2">
+            <span className="w-1 h-4 rounded-full bg-violet-400" />市场广度 (近60日)
+          </h2>
+          {breadthOption ? (
+            <ReactECharts option={breadthOption} style={{ height: 280 }} />
+          ) : <p className="text-sm text-gray-500">暂无市场广度数据，请先同步 daily_quotes + market_breadth</p>}
+        </section>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* North-bound Flow */}
         <section className="card">
           <h2 className="text-sm font-bold text-slate-400 mb-3 flex items-center gap-2"><span className="w-1 h-4 rounded-full bg-teal-400" />北向资金 (近60日)</h2>
@@ -144,17 +201,42 @@ export function DashboardPage() {
             <ReactECharts option={northOption} style={{ height: 280 }} />
           ) : <p className="text-sm text-gray-500">暂无北向资金数据</p>}
         </section>
+
+        {/* Multi-Index Comparison */}
+        <section className="card">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-slate-400 flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-blue-400" />指数对比 (近60日归一化)
+            </h2>
+            <div className="flex gap-1">
+              {INDEX_OPTIONS.map((idx) => (
+                <button
+                  key={idx.code}
+                  className={`px-2 py-0.5 text-[10px] rounded transition-colors ${
+                    selectedIndices.includes(idx.code)
+                      ? "bg-blue-600/20 text-blue-300 border border-blue-500/50"
+                      : "bg-gray-800 text-gray-500 border border-gray-700"
+                  }`}
+                  onClick={() => {
+                    setSelectedIndices((prev) =>
+                      prev.includes(idx.code)
+                        ? prev.filter((c) => c !== idx.code)
+                        : prev.length < 4 ? [...prev, idx.code] : prev
+                    );
+                  }}
+                >
+                  {idx.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          {compareOption ? (
+            <ReactECharts option={compareOption} style={{ height: 250 }} />
+          ) : <p className="text-sm text-gray-500">选择至少一个指数</p>}
+        </section>
       </div>
 
-      {/* Index Comparison */}
-      {compareOption && (
-        <section className="card">
-          <h2 className="text-sm font-bold text-slate-400 mb-3 flex items-center gap-2"><span className="w-1 h-4 rounded-full bg-teal-400" />沪深300 走势 (近60日归一化)</h2>
-          <ReactECharts option={compareOption} style={{ height: 250 }} />
-        </section>
-      )}
-
-      {/* Watchlist */}
+      {/* Watchlist with prices */}
       <section className="card">
         <h2 className="text-sm font-bold text-slate-400 mb-3 flex items-center gap-2"><span className="w-1 h-4 rounded-full bg-teal-400" />
           自选股
@@ -163,23 +245,52 @@ export function DashboardPage() {
         {watchlist.data && watchlist.data.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {watchlist.data.map((w) => (
-              <div key={w.id} className="flex items-center justify-between p-2 rounded bg-gray-900 hover:bg-gray-800 cursor-pointer"
-                onClick={() => navigate(`/stock/${w.stock_code}`)}>
-                <div>
-                  <span className="font-mono text-sm text-gray-300">{w.stock_code}</span>
-                  {w.notes && <span className="text-xs text-gray-500 ml-2">{w.notes}</span>}
-                </div>
-                <button className="text-xs text-red-400 hover:text-red-300"
-                  onClick={(e) => { e.stopPropagation(); deleteWatchlist(w.id).then(() => watchlist.refetch()); }}>
-                  ×
-                </button>
-              </div>
+              <WatchlistCard key={w.id} watchlistItem={w} onRemove={() => deleteWatchlist(w.id).then(() => watchlist.refetch())} onClick={() => navigate(`/stock/${w.stock_code}`)} />
             ))}
           </div>
         ) : (
           <p className="text-sm text-gray-500">暂无自选股，在数据管理页面添加</p>
         )}
       </section>
+    </div>
+  );
+}
+
+function WatchlistCard({ watchlistItem, onRemove, onClick }: { watchlistItem: { id: number; stock_code: string; notes?: string }; onRemove: () => void; onClick: () => void }) {
+  const profile = useQuery({
+    queryKey: ["stock-profile", watchlistItem.stock_code],
+    queryFn: () => fetchStockProfile(watchlistItem.stock_code),
+    staleTime: 60000,
+  });
+
+  const name = profile.data?.name || watchlistItem.stock_code;
+  const close = profile.data?.latest_price;
+  const changePct = profile.data?.change_pct;
+
+  return (
+    <div className="flex items-center justify-between p-2 rounded bg-gray-900 hover:bg-gray-800 cursor-pointer"
+      onClick={onClick}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm text-gray-300">{watchlistItem.stock_code}</span>
+          <span className="text-xs text-gray-400 truncate">{name}</span>
+        </div>
+        {close != null && (
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-sm font-medium text-gray-200">{close.toFixed(2)}</span>
+            {changePct != null && (
+              <span className={`text-xs ${(changePct ?? 0) >= 0 ? "text-red-400" : "text-green-400"}`}>
+                {(changePct ?? 0) >= 0 ? "+" : ""}{changePct.toFixed(2)}%
+              </span>
+            )}
+          </div>
+        )}
+        {watchlistItem.notes && <span className="text-[10px] text-gray-500">{watchlistItem.notes}</span>}
+      </div>
+      <button className="text-xs text-red-400 hover:text-red-300 ml-2"
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}>
+        ×
+      </button>
     </div>
   );
 }

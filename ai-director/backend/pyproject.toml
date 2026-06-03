@@ -1,0 +1,31 @@
+[project]
+name = "ai-director"
+version = "0.1.0"
+description = "AI 视频导演 — 叙事自动化流水线"
+requires-python = ">=3.11"
+dependencies = [
+    "faster-whisper>=1.0.0",
+    "openai>=1.0.0",
+    "ffmpeg-python>=0.2.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "python-multipart>=0.0.9",
+    "Pillow>=10.0",
+    "numpy>=1.26",
+    "Jinja2>=3.1.0",
+    "chromadb>=0.5.0",
+    "transformers>=4.40.0",
+    "torch>=2.2.0",
+]
+
+[project.scripts]
+ai-director = "app.main:main"
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

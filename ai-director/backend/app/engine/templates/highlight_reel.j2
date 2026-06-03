@@ -1,0 +1,34 @@
+你是一个专业的短视频内容策划。以下是某段视频/播客的带时间戳字幕文本。
+
+请从中找出最精彩的片段，每个片段作为独立分镜。
+
+## 字幕文本
+{{ subtitle_text }}
+
+## 要求
+- 目标总时长: {{ target_duration_sec }} 秒
+- 高光片段数量: {{ shot_count }} 个
+- 每个片段时长约 {{ highlight_duration }} 秒
+- 评选标准：信息密度、情绪张力、传播力
+
+## 输出格式
+严格按照以下 JSON 结构输出：
+
+{
+  "theme": "{{ theme }}",
+  "narrative_type": "highlight_reel",
+  "target_duration_sec": {{ target_duration_sec }},
+  "soundtrack_notes": "",
+  "shots": [
+    {
+      "index": 1,
+      "description": "用中文描述这个片段的内容",
+      "duration_sec": {{ highlight_duration }},
+      "tone": "excited",
+      "transition_in": "cut",
+      "transition_out": "cut",
+      "narration": null,
+      "music_style": null
+    }
+  ]
+}

@@ -3,6 +3,8 @@ __pycache__/
 *.pyo
 *.pyd
 
+frontend/node_modules/
+
 output_e2e/
 temp_e2e/
 output_test/

@@ -1,279 +1,242 @@
-"""Report service: metrics computation, chart rendering, PDF/HTML generation."""
-import io
-import base64
 import json
-import logging
+import csv
+import html as html_module
+import io
 from datetime import date
-import numpy as np
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
-from matplotlib.ticker import FuncFormatter
-from jinja2 import Environment, FileSystemLoader, Template
-from pathlib import Path
-
-from ..models.backtest import BacktestRun, BacktestDaily, BacktestSummary
-from ..engine.performance import compute_all_metrics
-
-logger = logging.getLogger(__name__)
-
-# Chinese-friendly matplotlib setup
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
-
-TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
+from ..models.backtest import BacktestRun, BacktestDaily, BacktestSummary, BacktestTrade
 
 
-class ReportService:
-    def __init__(self, db: AsyncSession):
-        self.db = db
-
-    async def get_full_metrics(self, run_id: str) -> dict | None:
-        run_result = await self.db.execute(select(BacktestRun).where(BacktestRun.id == run_id))
-        run = run_result.scalar_one_or_none()
-        if not run:
-            return None
-
-        sum_result = await self.db.execute(select(BacktestSummary).where(BacktestSummary.run_id == run_id))
-        summary = sum_result.scalar_one_or_none()
-
-        daily_result = await self.db.execute(
-            select(BacktestDaily).where(BacktestDaily.run_id == run_id).order_by(BacktestDaily.trade_date)
-        )
-        daily_rows = daily_result.scalars().all()
-
-        if not summary:
-            return {"error": "no summary data"}
-
-        daily_returns = [d.daily_return for d in daily_rows]
-        daily_values = [d.portfolio_value for d in daily_rows]
-        bm_returns = [d.benchmark_return for d in daily_rows]
-        dates = [d.trade_date.isoformat() if d.trade_date else "" for d in daily_rows]
-
-        monthly = json.loads(summary.monthly_returns_json) if summary.monthly_returns_json else []
-
-        return {
-            "config": run.config_json or {},
-            "name": run.name,
-            "status": run.status,
-            "started_at": run.started_at.isoformat() if run.started_at else "",
-            "completed_at": run.completed_at.isoformat() if run.completed_at else "",
-            "summary": {
-                "total_return": summary.total_return,
-                "annual_return": summary.annual_return,
-                "volatility": summary.volatility,
-                "max_drawdown": summary.max_drawdown,
-                "max_drawdown_duration": summary.max_drawdown_duration,
-                "sharpe": summary.sharpe,
-                "calmar": summary.calmar,
-                "sortino": summary.sortino,
-                "alpha": summary.alpha,
-                "beta": summary.beta,
-                "r_squared": summary.r_squared,
-                "information_ratio": summary.information_ratio,
-                "var_95": summary.var_95,
-                "cvar_95": summary.cvar_95,
-                "monthly_returns": monthly,
-            },
-            "daily": {
-                "dates": dates,
-                "values": daily_values,
-                "returns": daily_returns,
-                "benchmark_values": [d.benchmark_value for d in daily_rows],
-                "benchmark_returns": bm_returns,
-            },
-        }
-
-    async def generate_html(self, run_id: str) -> str | None:
-        data = await self.get_full_metrics(run_id)
-        if not data or "error" in data:
-            return None
-
-        charts = self._generate_charts(data)
-
-        env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
-        try:
-            template = env.get_template("report.html")
-        except Exception:
-            template = Template(HTML_TEMPLATE)
-
-        return template.render(
-            name=data["name"],
-            config=data["config"],
-            summary=data["summary"],
-            daily=data["daily"],
-            charts=charts,
-            generated_at=date.today().isoformat(),
-        )
-
-    async def generate_pdf(self, run_id: str) -> bytes | None:
-        html = await self.generate_html(run_id)
-        if not html:
-            return None
-        try:
-            from weasyprint import HTML
-            return HTML(string=html).write_pdf()
-        except ImportError:
-            logger.warning("WeasyPrint not installed, returning HTML bytes")
-            return html.encode("utf-8")
-
-    def _generate_charts(self, data: dict) -> dict[str, str]:
-        """Generate base64-encoded chart images."""
-        charts = {}
-        try:
-            charts["equity"] = self._equity_chart(data)
-        except Exception:
-            charts["equity"] = ""
-        try:
-            charts["drawdown"] = self._drawdown_chart(data)
-        except Exception:
-            charts["drawdown"] = ""
-        try:
-            charts["monthly"] = self._monthly_chart(data)
-        except Exception:
-            charts["monthly"] = ""
-        try:
-            charts["distribution"] = self._distribution_chart(data)
-        except Exception:
-            charts["distribution"] = ""
-        return charts
-
-    def _fig_to_b64(self, fig: Figure) -> str:
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=100, bbox_inches="tight")
-        buf.seek(0)
-        b64 = base64.b64encode(buf.read()).decode()
-        plt.close(fig)
-        return f"data:image/png;base64,{b64}"
-
-    def _equity_chart(self, data: dict) -> str:
-        fig, ax = plt.subplots(figsize=(8, 3.5))
-        d = data["daily"]
-        x = list(range(len(d["dates"])))
-        ax.plot(x, d["values"], color="#3b82f6", linewidth=1.5, label="Portfolio")
-        ax.plot(x, d["benchmark_values"], color="#9ca3af", linewidth=1, linestyle="--", label="Benchmark")
-        ax.legend(loc="upper left", fontsize=8)
-        ax.set_title("Equity Curve", fontsize=10)
-        ax.grid(alpha=0.3)
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.0f}"))
-        return self._fig_to_b64(fig)
-
-    def _drawdown_chart(self, data: dict) -> str:
-        fig, ax = plt.subplots(figsize=(8, 2))
-        values = np.array(data["daily"]["values"])
-        peak = np.maximum.accumulate(values)
-        dd = (values / peak - 1) * 100
-        ax.fill_between(range(len(dd)), dd, 0, color="#ef4444", alpha=0.3)
-        ax.plot(dd, color="#ef4444", linewidth=0.8)
-        ax.set_title("Drawdown (%)", fontsize=10)
-        ax.grid(alpha=0.3)
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.0f}%"))
-        return self._fig_to_b64(fig)
-
-    def _monthly_chart(self, data: dict) -> str:
-        monthly = data["summary"].get("monthly_returns", [])
-        if not monthly:
-            return ""
-        fig, ax = plt.subplots(figsize=(8, 2.5))
-        values = [m["return"] * 100 for m in monthly]
-        colors = ["#ef4444" if v >= 0 else "#22c55e" for v in values]
-        ax.bar(range(len(values)), values, color=colors)
-        ax.set_title("Monthly Returns (%)", fontsize=10)
-        ax.grid(alpha=0.3, axis="y")
-        ax.axhline(y=0, color="white", linewidth=0.5)
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.1f}%"))
-        return self._fig_to_b64(fig)
-
-    def _distribution_chart(self, data: dict) -> str:
-        returns = data["daily"]["returns"]
-        if not returns:
-            return ""
-        fig, ax = plt.subplots(figsize=(8, 2.5))
-        ax.hist(np.array(returns) * 100, bins=30, color="#3b82f6", alpha=0.7, edgecolor="white")
-        ax.axvline(x=0, color="white", linewidth=0.5)
-        ax.set_title("Daily Return Distribution", fontsize=10)
-        ax.grid(alpha=0.3, axis="y")
-        ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.1f}%"))
-        return self._fig_to_b64(fig)
+def _build_monthly_table(monthly_returns: list[dict]) -> str:
+    """Build monthly returns HTML table with proper escaping."""
+    if not monthly_returns:
+        return ""
+    rows = []
+    for m in monthly_returns:
+        month = html_module.escape(str(m.get("month", "")))
+        ret = m.get("return", 0)
+        cls = "value positive" if ret > 0 else "value negative"
+        rows.append(f'<tr><td>{month}</td><td class="{cls}">{ret * 100:.2f}%</td></tr>')
+    return f'<h2>月度收益</h2><table><tr><th>月份</th><th>收益率</th></tr>{"".join(rows)}</table>'
 
 
-HTML_TEMPLATE = """<!DOCTYPE html>
+async def generate_csv_export(run_id: str, db: AsyncSession) -> str:
+    run_result = await db.execute(select(BacktestRun).where(BacktestRun.id == run_id))
+    run = run_result.scalar_one_or_none()
+    if not run:
+        return ""
+
+    daily_result = await db.execute(
+        select(BacktestDaily).where(BacktestDaily.run_id == run_id).order_by(BacktestDaily.trade_date)
+    )
+    daily_rows = daily_result.scalars().all()
+
+    summary_result = await db.execute(select(BacktestSummary).where(BacktestSummary.run_id == run_id))
+    summary = summary_result.scalar_one_or_none()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header info
+    config = run.config_json or {}
+    writer.writerow(["回测名称", run.name])
+    writer.writerow(["回测区间", f"{config.get('start_date', '')} ~ {config.get('end_date', '')}"])
+    writer.writerow(["因子", ", ".join(config.get("factor_names", []))])
+    writer.writerow([])
+
+    # Summary metrics
+    if summary:
+        writer.writerow(["指标", "数值"])
+        writer.writerow(["总收益率", f"{summary.total_return:.4%}" if summary.total_return else "0.00%"])
+        writer.writerow(["年化收益率", f"{summary.annual_return:.4%}" if summary.annual_return else "0.00%"])
+        writer.writerow(["年化波动率", f"{summary.volatility:.4%}" if summary.volatility else "0.00%"])
+        writer.writerow(["最大回撤", f"{summary.max_drawdown:.4%}" if summary.max_drawdown else "0.00%"])
+        writer.writerow(["Sharpe比率", f"{summary.sharpe:.4f}" if summary.sharpe else "0.0000"])
+        writer.writerow(["Calmar比率", f"{summary.calmar:.4f}" if summary.calmar else "0.0000"])
+        writer.writerow(["Sortino比率", f"{summary.sortino:.4f}" if summary.sortino else "0.0000"])
+        writer.writerow(["Alpha", f"{summary.alpha:.4%}" if summary.alpha else "0.00%"])
+        writer.writerow(["Beta", f"{summary.beta:.4f}" if summary.beta else "0.0000"])
+        writer.writerow(["R²", f"{summary.r_squared:.4f}" if summary.r_squared else "0.0000"])
+        writer.writerow(["信息比率", f"{summary.information_ratio:.4f}" if summary.information_ratio else "0.0000"])
+        writer.writerow(["胜率", f"{summary.win_rate:.4%}" if summary.win_rate else "0.00%"])
+        writer.writerow(["盈亏比", f"{summary.profit_factor:.4f}" if summary.profit_factor else "0.0000"])
+        writer.writerow([])
+
+    # Daily data
+    writer.writerow(["日期", "组合净值", "基准净值", "日收益", "基准收益", "换手率", "现金"])
+    for d in daily_rows:
+        writer.writerow([
+            d.trade_date.isoformat() if d.trade_date else "",
+            d.portfolio_value,
+            d.benchmark_value,
+            d.daily_return,
+            d.benchmark_return,
+            d.turnover,
+            d.cash,
+        ])
+
+    writer.writerow([])
+
+    # Trades
+    trade_result = await db.execute(
+        select(BacktestTrade).where(BacktestTrade.run_id == run_id).order_by(BacktestTrade.trade_date)
+    )
+    trades = trade_result.scalars().all()
+    if trades:
+        writer.writerow(["交易明细"])
+        writer.writerow(["日期", "股票", "方向", "股数", "价格", "金额", "成本", "滑点"])
+        for t in trades:
+            writer.writerow([
+                t.trade_date.isoformat() if t.trade_date else "",
+                t.stock_code,
+                t.direction,
+                t.shares,
+                t.price,
+                t.amount,
+                t.cost,
+                t.slippage,
+            ])
+
+    return output.getvalue()
+
+
+async def generate_html_report(run_id: str, db: AsyncSession) -> str:
+    run_result = await db.execute(select(BacktestRun).where(BacktestRun.id == run_id))
+    run = run_result.scalar_one_or_none()
+    if not run:
+        return "<html><body><h1>Report not found</h1></body></html>"
+
+    summary_result = await db.execute(select(BacktestSummary).where(BacktestSummary.run_id == run_id))
+    summary = summary_result.scalar_one_or_none()
+
+    daily_result = await db.execute(
+        select(BacktestDaily).where(BacktestDaily.run_id == run_id).order_by(BacktestDaily.trade_date)
+    )
+    daily_rows = daily_result.scalars().all()
+
+    trade_result = await db.execute(
+        select(BacktestTrade).where(BacktestTrade.run_id == run_id).order_by(BacktestTrade.trade_date)
+    )
+    trades = trade_result.scalars().all()
+
+    config = run.config_json or {}
+    s = summary
+
+    # Build daily values array for ECharts
+    daily_dates = [d.trade_date.isoformat() if d.trade_date else "" for d in daily_rows]
+    daily_values = [d.portfolio_value for d in daily_rows]
+    daily_bm = [d.benchmark_value for d in daily_rows]
+
+    # Monthly returns
+    monthly_returns = json.loads(s.monthly_returns_json) if s and s.monthly_returns_json else []
+
+    html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8"/>
-<title>{{ name }} - AsQuant Report</title>
-<style>
-  body { font-family: 'Microsoft YaHei', Arial, sans-serif; background: #111827; color: #e5e7eb; padding: 30px; max-width: 900px; margin: auto; }
-  h1 { color: #f9fafb; border-bottom: 2px solid #374151; padding-bottom: 10px; }
-  h2 { color: #9ca3af; font-size: 1em; margin-top: 24px; }
-  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
-  .metric { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 12px; text-align: center; }
-  .metric .label { font-size: 0.75em; color: #9ca3af; }
-  .metric .value { font-size: 1.4em; font-weight: bold; color: #f9fafb; }
-  .metric .pos { color: #ef4444; }
-  .metric .neg { color: #22c55e; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin: 12px 0; }
-  th { text-align: left; color: #9ca3af; border-bottom: 1px solid #374151; padding: 8px 4px; }
-  td { padding: 6px 4px; border-bottom: 1px solid #1f2937; }
-  img { max-width: 100%; margin: 8px 0; border-radius: 6px; }
-  .footer { margin-top: 30px; font-size: 0.75em; color: #6b7280; text-align: center; }
-</style>
+    <meta charset="UTF-8">
+    <title>回测报告 - {html_module.escape(run.name)}</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111827; color: #e5e7eb; padding: 2rem; }}
+        .container {{ max-width: 1000px; margin: 0 auto; }}
+        h1 {{ font-size: 1.5rem; margin-bottom: 0.5rem; }}
+        .meta {{ color: #9ca3af; font-size: 0.875rem; margin-bottom: 2rem; }}
+        .grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }}
+        .card {{ background: #1f2937; border-radius: 8px; padding: 1rem; text-align: center; }}
+        .card .label {{ color: #9ca3af; font-size: 0.75rem; margin-bottom: 0.25rem; }}
+        .card .value {{ font-size: 1.125rem; font-weight: 600; }}
+        .card .value.positive {{ color: #22c55e; }}
+        .card .value.negative {{ color: #ef4444; }}
+        .chart {{ height: 400px; background: #1f2937; border-radius: 8px; margin-bottom: 2rem; padding: 1rem; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 2rem; background: #1f2937; border-radius: 8px; overflow: hidden; }}
+        th, td {{ padding: 0.5rem 0.75rem; text-align: left; font-size: 0.8125rem; }}
+        th {{ color: #9ca3af; border-bottom: 1px solid #374151; }}
+        td {{ border-bottom: 1px solid #1f2937; }}
+        tr:nth-child(even) {{ background: #1a2332; }}
+        h2 {{ font-size: 1.125rem; margin-bottom: 1rem; margin-top: 2rem; }}
+        @media print {{ body {{ background: white; color: black; }} .card {{ background: #f3f4f6; }} }}
+    </style>
 </head>
 <body>
-<h1>{{ name }}</h1>
-<p style="color:#9ca3af;font-size:0.85em;">
-  {{ config.start_date }} ~ {{ config.end_date }} |
-  Generated: {{ generated_at }}
-</p>
+<div class="container">
+    <h1>回测报告: {html_module.escape(run.name)}</h1>
+    <p class="meta">区间: {html_module.escape(str(config.get('start_date', '')))} ~ {html_module.escape(str(config.get('end_date', '')))} | 因子: {html_module.escape(', '.join(config.get('factor_names', [])))} | 权重: {html_module.escape(str(config.get('weighting', 'equal')))}</p>
 
-<h2>Performance Summary</h2>
-<div class="metrics">
-  <div class="metric"><div class="label">Cumulative Return</div><div class="value {{ 'pos' if summary.total_return > 0 else 'neg' }}">{{ '{:.2%}'.format(summary.total_return) }}</div></div>
-  <div class="metric"><div class="label">Annual Return</div><div class="value">{{ '{:.2%}'.format(summary.annual_return) }}</div></div>
-  <div class="metric"><div class="label">Volatility</div><div class="value">{{ '{:.2%}'.format(summary.volatility) }}</div></div>
-  <div class="metric"><div class="label">Max Drawdown</div><div class="value">{{ '{:.2%}'.format(summary.max_drawdown) }}</div></div>
+    <div class="grid">
+        <div class="card">
+            <div class="label">总收益率</div>
+            <div class="value {'positive' if s and s.total_return and s.total_return > 0 else 'negative'}">{(s.total_return * 100) if s else 0:.2f}%</div>
+        </div>
+        <div class="card">
+            <div class="label">年化收益率</div>
+            <div class="value {'positive' if s and s.annual_return and s.annual_return > 0 else 'negative'}">{(s.annual_return * 100) if s else 0:.2f}%</div>
+        </div>
+        <div class="card">
+            <div class="label">Sharpe 比率</div>
+            <div class="value">{s.sharpe if s else 0:.3f}</div>
+        </div>
+        <div class="card">
+            <div class="label">最大回撤</div>
+            <div class="value negative">{(s.max_drawdown * 100) if s else 0:.2f}%</div>
+        </div>
+        <div class="card">
+            <div class="label">年化波动率</div>
+            <div class="value">{(s.volatility * 100) if s else 0:.2f}%</div>
+        </div>
+        <div class="card">
+            <div class="label">Calmar 比率</div>
+            <div class="value">{s.calmar if s else 0:.3f}</div>
+        </div>
+        <div class="card">
+            <div class="label">Alpha</div>
+            <div class="value">{(s.alpha * 100) if s else 0:.2f}%</div>
+        </div>
+        <div class="card">
+            <div class="label">胜率</div>
+            <div class="value">{(s.win_rate * 100) if s else 0:.1f}%</div>
+        </div>
+    </div>
+
+    <h2>净值曲线</h2>
+    <div class="chart" id="navChart"></div>
+
+    <h2>风险指标</h2>
+    <table>
+        <tr><th>指标</th><th>数值</th><th>指标</th><th>数值</th></tr>
+        <tr><td>Sortino比率</td><td>{s.sortino if s else 0:.4f}</td><td>Beta</td><td>{s.beta if s else 1:.4f}</td></tr>
+        <tr><td>VaR(95%)</td><td>{(s.var_95 * 100) if s else 0:.2f}%</td><td>CVaR(95%)</td><td>{(s.cvar_95 * 100) if s else 0:.2f}%</td></tr>
+        <tr><td>信息比率</td><td>{s.information_ratio if s else 0:.4f}</td><td>R²</td><td>{s.r_squared if s else 0:.4f}</td></tr>
+        <tr><td>盈亏比</td><td>{s.profit_factor if s else 0:.4f}</td><td>盈亏平均比</td><td>{s.avg_win_loss if s else 0:.4f}</td></tr>
+        <tr><td>偏度</td><td>{s.skewness if s else 0:.4f}</td><td>峰度</td><td>{s.kurtosis if s else 0:.4f}</td></tr>
+        <tr><td>最大回撤持续</td><td>{s.max_drawdown_duration if s else 0} 天</td><td>Treynor</td><td>{s.treynor if s else 0:.4f}</td></tr>
+    </table>
+
+    {_build_monthly_table(monthly_returns)}
+
+    <h2>交易统计</h2>
+    <p style="color:#9ca3af;font-size:0.875rem;margin-bottom:1rem;">共 {len(trades)} 笔交易 | 买入 {sum(1 for t in trades if t.direction == 'buy')} 笔 | 卖出 {sum(1 for t in trades if t.direction == 'sell')} 笔</p>
+    {"<table><tr><th>日期</th><th>股票</th><th>方向</th><th>股数</th><th>价格</th><th>金额</th><th>成本</th></tr>" + "".join(f'<tr><td>{html_module.escape(t.trade_date.isoformat() if t.trade_date else "")}</td><td>{html_module.escape(t.stock_code)}</td><td>{html_module.escape(t.direction)}</td><td>{t.shares}</td><td>{t.price:.2f}</td><td>{t.amount:.2f}</td><td>{t.cost:.2f}</td></tr>' for t in trades[:100]) + "</table>" if trades else ""}
+    {f'<p style="color:#9ca3af;font-size:0.75rem;">仅显示前 100 笔交易（共 {len(trades)} 笔）</p>' if len(trades) > 100 else ""}
+
+    <p style="color:#6b7280;font-size:0.75rem;margin-top:2rem;text-align:center;">生成于 AsQuant 回测引擎</p>
 </div>
-<div class="metrics">
-  <div class="metric"><div class="label">Sharpe</div><div class="value">{{ '{:.2f}'.format(summary.sharpe) }}</div></div>
-  <div class="metric"><div class="label">Calmar</div><div class="value">{{ '{:.2f}'.format(summary.calmar) }}</div></div>
-  <div class="metric"><div class="label">Sortino</div><div class="value">{{ '{:.2f}'.format(summary.sortino) }}</div></div>
-  <div class="metric"><div class="label">Info Ratio</div><div class="value">{{ '{:.2f}'.format(summary.information_ratio) }}</div></div>
-</div>
-<div class="metrics">
-  <div class="metric"><div class="label">Alpha</div><div class="value">{{ '{:.2%}'.format(summary.alpha) }}</div></div>
-  <div class="metric"><div class="label">Beta</div><div class="value">{{ '{:.2f}'.format(summary.beta) }}</div></div>
-  <div class="metric"><div class="label">R²</div><div class="value">{{ '{:.3f}'.format(summary.r_squared) }}</div></div>
-  <div class="metric"><div class="label">VaR (95%)</div><div class="value">{{ '{:.2%}'.format(summary.var_95) }}</div></div>
-</div>
-
-{% if charts.equity %}
-<h2>Equity Curve</h2>
-<img src="{{ charts.equity }}" alt="Equity Curve"/>
-{% endif %}
-
-{% if charts.drawdown %}
-<h2>Drawdown</h2>
-<img src="{{ charts.drawdown }}" alt="Drawdown"/>
-{% endif %}
-
-{% if charts.distribution %}
-<h2>Return Distribution</h2>
-<img src="{{ charts.distribution }}" alt="Distribution"/>
-{% endif %}
-
-{% if summary.monthly_returns %}
-<h2>Monthly Returns</h2>
-<table>
-  <tr><th>Month</th><th>Return</th></tr>
-  {% for m in summary.monthly_returns %}
-  <tr><td>{{ loop.index }}</td><td class="{{ 'pos' if m.return > 0 else 'neg' }}">{{ '{:.2%}'.format(m.return) }}</td></tr>
-  {% endfor %}
-</table>
-{% endif %}
-
-<div class="footer">AsQuant Report &mdash; Generated {{ generated_at }}</div>
+<script>
+    var chart = echarts.init(document.getElementById('navChart'));
+    chart.setOption({{
+        tooltip: {{ trigger: 'axis' }},
+        legend: {{ data: ['组合净值', '基准净值'], textStyle: {{ color: '#9ca3af' }} }},
+        grid: {{ left: 60, right: 20, top: 20, bottom: 30 }},
+        xAxis: {{ type: 'category', data: {json.dumps(daily_dates)}, axisLabel: {{ color: '#9ca3af', fontSize: 10 }} }},
+        yAxis: {{ type: 'value', axisLabel: {{ color: '#9ca3af' }} }},
+        series: [
+            {{ name: '组合净值', type: 'line', data: {json.dumps(daily_values)}, lineStyle: {{ color: '#22c55e' }}, itemStyle: {{ color: '#22c55e' }}, symbol: 'none' }},
+            {{ name: '基准净值', type: 'line', data: {json.dumps(daily_bm)}, lineStyle: {{ color: '#f59e0b', type: 'dashed' }}, itemStyle: {{ color: '#f59e0b' }}, symbol: 'none' }}
+        ]
+    }});
+    window.addEventListener('resize', function() {{ chart.resize(); }});
+</script>
 </body>
 </html>"""
+    return html

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+target/
+*.node
+*.lock
+*.vsix
+pnpm-lock.yaml
+.codebase-cache/
+*.db
+*.db-journal
+.tauri/
+src-tauri/target/

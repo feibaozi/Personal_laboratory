@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 class ElemeCollector(BaseCollector):
     platform = "eleme"
     base_url = "https://h5.ele.me"
-    strategy_order = ["crawler", "cache"]
+    strategy_order = ["cache"]
+    robots_allowed = False
 
     def __init__(self):
         super().__init__()

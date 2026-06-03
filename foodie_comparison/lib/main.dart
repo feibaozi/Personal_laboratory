@@ -5,6 +5,7 @@ import 'providers/auth_provider.dart';
 import 'providers/home_provider.dart';
 import 'providers/compare_provider.dart';
 import 'providers/recommend_provider.dart';
+import 'providers/crawl_provider.dart';
 import 'pages/home_page.dart';
 import 'pages/compare_page.dart';
 import 'pages/recommend_page.dart';
@@ -135,6 +136,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => HomeProvider()),
         ChangeNotifierProvider(create: (_) => CompareProvider()),
         ChangeNotifierProvider(create: (_) => RecommendProvider()),
+        ChangeNotifierProvider(create: (_) => CrawlProvider()),
       ],
       child: MaterialApp.router(
         title: '外卖比价助手',

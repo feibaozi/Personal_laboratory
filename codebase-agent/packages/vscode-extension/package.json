@@ -1,0 +1,107 @@
+{
+  "name": "codebase-agent-vscode",
+  "displayName": "Codebase Agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local codebase analysis agent with dependency graphs, tech debt quantification, and lineage tracing",
+  "publisher": "codebase-agent",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Linters",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codebase-agent.analyze",
+        "title": "Codebase Agent: Analyze Current Project"
+      },
+      {
+        "command": "codebase-agent.showDependencyGraph",
+        "title": "Codebase Agent: Show Dependency Graph"
+      },
+      {
+        "command": "codebase-agent.traceLineage",
+        "title": "Codebase Agent: Trace Lineage of Symbol"
+      },
+      {
+        "command": "codebase-agent.generateDocs",
+        "title": "Codebase Agent: Generate Architecture Document"
+      },
+      {
+        "command": "codebase-agent.showDebtDashboard",
+        "title": "Codebase Agent: Show Debt Dashboard"
+      },
+      {
+        "command": "codebase-agent.showRefactorSuggestions",
+        "title": "Codebase Agent: Show Refactoring Suggestions"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codebase-agent-sidebar",
+          "title": "Codebase Agent",
+          "icon": "$(graph)"
+        }
+      ]
+    },
+    "views": {
+      "codebase-agent-sidebar": [
+        {
+          "id": "codebase-agent.debtView",
+          "name": "Tech Debt Overview"
+        },
+        {
+          "id": "codebase-agent.dependencyView",
+          "name": "Dependencies"
+        },
+        {
+          "id": "codebase-agent.smellView",
+          "name": "Code Smells"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Codebase Agent",
+      "properties": {
+        "codebaseAgent.serverPort": {
+          "type": "number",
+          "default": 3456,
+          "description": "Port for the orchestrator server"
+        },
+        "codebaseAgent.languages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["python", "typescript", "go"]
+          },
+          "default": ["typescript"],
+          "description": "Languages to analyze"
+        },
+        "codebaseAgent.autoAnalyze": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically analyze project on open"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

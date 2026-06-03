@@ -23,6 +23,7 @@ build/
 .idea/
 .vscode/
 *.log
+test_output.txt
 data/
 collected_data/
 playwright-report/

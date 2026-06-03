@@ -118,6 +118,7 @@ def compute_all_metrics(
     daily_values: np.ndarray,
     benchmark_returns: np.ndarray | None = None,
     rf_annual: float = 0.02,
+    dates: list | None = None,
 ) -> dict:
     """Compute all performance metrics."""
     ret_arr = np.array(daily_returns)
@@ -128,7 +129,7 @@ def compute_all_metrics(
     if benchmark_returns is not None:
         reg = alpha_beta(ret_arr, np.array(benchmark_returns), rf_annual)
 
-    monthly = _monthly_returns(ret_arr)
+    monthly = _monthly_returns(ret_arr, dates)
 
     beta = reg.get("beta", 0)
 
@@ -174,7 +175,7 @@ def profit_factor(daily_returns: np.ndarray) -> float:
     gains = daily_returns[daily_returns > 0].sum()
     losses = abs(daily_returns[daily_returns < 0].sum())
     if losses == 0:
-        return float("inf") if gains > 0 else 0.0
+        return 999.0 if gains > 0 else 0.0
     return float(gains / losses)
 
 
@@ -185,7 +186,7 @@ def avg_win_loss(daily_returns: np.ndarray) -> float:
     avg_gain = gains.mean() if len(gains) > 0 else 0
     avg_loss = abs(losses.mean()) if len(losses) > 0 else 0
     if avg_loss == 0:
-        return float("inf") if avg_gain > 0 else 0.0
+        return 999.0 if avg_gain > 0 else 0.0
     return float(avg_gain / avg_loss)
 
 
@@ -203,10 +204,32 @@ def kurtosis(daily_returns: np.ndarray) -> float:
     return float(stats.kurtosis(daily_returns))
 
 
-def _monthly_returns(daily_returns: np.ndarray) -> list[dict]:
-    """Aggregate daily returns to monthly."""
+def _monthly_returns(daily_returns: np.ndarray, dates: list | None = None) -> list[dict]:
+    """Aggregate daily returns to calendar months."""
     if len(daily_returns) < 21:
         return []
+
+    # If dates are provided, group by calendar month
+    if dates is not None and len(dates) == len(daily_returns):
+        from collections import OrderedDict
+        month_groups: OrderedDict[str, list[float]] = OrderedDict()
+        for dt, ret in zip(dates, daily_returns):
+            if hasattr(dt, 'strftime'):
+                key = dt.strftime("%Y-%m")
+            else:
+                d_str = str(dt)
+                key = d_str[:7]  # "YYYY-MM"
+            if key not in month_groups:
+                month_groups[key] = []
+            month_groups[key].append(float(ret))
+        months = []
+        for key, rets in month_groups.items():
+            if rets:
+                month_ret = float(np.prod(1 + np.array(rets)) - 1)
+                months.append({"month": key, "return": month_ret})
+        return months
+
+    # Fallback: fixed 21-day chunks
     months = []
     idx = 0
     days_per_month = 21

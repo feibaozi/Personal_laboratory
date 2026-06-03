@@ -35,7 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import auth, user, ocr, compare, recommend, home, admin
+from app.routers import auth, user, ocr, compare, recommend, home, admin, crawl
 app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(ocr.router)
@@ -43,6 +43,7 @@ app.include_router(compare.router)
 app.include_router(recommend.router)
 app.include_router(home.router)
 app.include_router(admin.router)
+app.include_router(crawl.router)
 
 
 @app.get("/health")

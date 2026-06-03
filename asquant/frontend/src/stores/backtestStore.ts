@@ -10,10 +10,15 @@ const defaultConfig: BacktestConfig = {
   top_n: 20,
   rebalance_freq: "monthly",
   weighting: "equal",
+  position_sizing: "equal",
   transaction_cost: 0.0003,
   slippage: 0.001,
   benchmark: "000300",
   initial_capital: 1_000_000,
+  max_drawdown_limit: 0,
+  daily_loss_limit: 0,
+  volatility_target: 0,
+  min_daily_amount: 5_000_000,
 };
 
 interface BacktestState {

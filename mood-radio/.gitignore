@@ -4,6 +4,14 @@ node_modules/
 # next.js
 .next/
 
+# electron build
+dist-electron/
+release/
+
+# python cache
+__pycache__/
+*.pyc
+
 # env & secrets
 .env
 .env.*

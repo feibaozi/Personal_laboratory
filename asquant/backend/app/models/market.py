@@ -11,7 +11,8 @@ class Stock(Base):
     industry = Column(String(50))
     industry_code = Column(String(10))
     area = Column(String(20))
-    list_date = Column(Date)
+    list_date = Column(Date, index=True)
+    out_date = Column(Date, index=True)
     is_st = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
 
@@ -136,3 +137,94 @@ class SyncLog(Base):
     status = Column(String(20))
     record_count = Column(Integer)
     error_message = Column(String(500))
+
+
+class StockInfo(Base):
+    __tablename__ = "stock_info"
+    stock_code = Column(String(6), primary_key=True)
+    total_shares = Column(BigInteger)
+    float_shares = Column(BigInteger)
+    industry_sw = Column(String(50))
+    industry_sw_code = Column(String(10))
+    updated_at = Column(DateTime, default=func.now())
+
+
+class FinancialReport(Base):
+    __tablename__ = "financial_reports"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    stock_code = Column(String(6), ForeignKey("stocks.code"), index=True)
+    report_date = Column(Date, index=True)
+    public_date = Column(Date, nullable=True, index=True)
+    report_type = Column(String(20))
+
+    revenue = Column(Float)
+    operating_cost = Column(Float)
+    selling_expense = Column(Float)
+    admin_expense = Column(Float)
+    rd_expense = Column(Float)
+    operating_profit = Column(Float)
+    net_profit = Column(Float)
+    net_profit_parent = Column(Float)
+
+    total_assets = Column(Float)
+    total_liabilities = Column(Float)
+    total_equity = Column(Float)
+    current_assets = Column(Float)
+    current_liabilities = Column(Float)
+
+    operating_cash_flow = Column(Float)
+    investing_cash_flow = Column(Float)
+    financing_cash_flow = Column(Float)
+    free_cash_flow = Column(Float)
+
+    roe_val = Column(Float)
+    net_margin_val = Column(Float)
+    gross_margin_val = Column(Float)
+    total_shares_val = Column(Float)
+    float_shares_val = Column(Float)
+
+    yoy_revenue_growth = Column(Float)
+    yoy_profit_growth = Column(Float)
+    yoy_parent_profit_growth = Column(Float)
+
+    dividend_per_share = Column(Float)
+
+    __table_args__ = (UniqueConstraint("stock_code", "report_date", "report_type"),)
+
+
+class MarginDetail(Base):
+    __tablename__ = "margin_details"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(Date, index=True)
+    stock_code = Column(String(6), ForeignKey("stocks.code"), index=True)
+    margin_buy = Column(Float)
+    margin_sell = Column(Float)
+    margin_balance = Column(Float)
+    short_sell_volume = Column(Float)
+    short_buy_volume = Column(Float)
+    short_balance = Column(Float)
+    total_balance = Column(Float)
+    __table_args__ = (UniqueConstraint("trade_date", "stock_code"),)
+
+
+class NorthBoundDaily(Base):
+    __tablename__ = "north_bound_daily"
+    trade_date = Column(Date, primary_key=True)
+    net_flow_sh = Column(Float)
+    net_flow_sz = Column(Float)
+    net_flow_total = Column(Float)
+    balance_sh = Column(Float)
+    balance_sz = Column(Float)
+    balance_total = Column(Float)
+
+
+class SectorFlow(Base):
+    __tablename__ = "sector_flow"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(Date, index=True)
+    sector_code = Column(String(10), index=True)
+    sector_name = Column(String(50))
+    net_flow = Column(Float)
+    buy_amount = Column(Float)
+    sell_amount = Column(Float)
+    __table_args__ = (UniqueConstraint("trade_date", "sector_code"),)

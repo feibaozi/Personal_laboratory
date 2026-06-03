@@ -48,14 +48,18 @@ class Settings(BaseSettings):
     ocr_confidence_threshold: float = 0.85
     ocr_use_gpu: bool = False
 
-    meituan_api_key: str = ""
-    meituan_api_secret: str = ""
-    eleme_api_key: str = ""
-    eleme_api_secret: str = ""
-    jd_api_key: str = ""
-    jd_api_secret: str = ""
-    douyin_api_key: str = ""
-    douyin_api_secret: str = ""
+    meituan_app_key: str = ""
+    meituan_app_secret: str = ""
+    meituan_token: str = ""
+    eleme_app_key: str = ""
+    eleme_app_secret: str = ""
+    eleme_token: str = ""
+    jd_app_key: str = ""
+    jd_app_secret: str = ""
+    jd_token: str = ""
+    douyin_app_key: str = ""
+    douyin_app_secret: str = ""
+    douyin_token: str = ""
 
     model_config = {"env_prefix": "", "case_sensitive": False}
 

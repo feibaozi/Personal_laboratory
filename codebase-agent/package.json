@@ -1,0 +1,26 @@
+{
+  "name": "codebase-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local Codebase Agent - multi-language AST analysis, dependency graph, technical debt quantification",
+  "scripts": {
+    "build:engine": "cd packages/engine && npx napi build --platform",
+    "build:all": "pnpm build:engine && pnpm -r build",
+    "dev:orchestrator": "pnpm --filter orchestrator dev",
+    "dev:desktop": "pnpm --filter desktop dev",
+    "dev:all": "concurrently \"pnpm dev:orchestrator\" \"pnpm dev:desktop\"",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@11.5.0+sha512.dbfcc4f81cf48597afd4bc391ffdf12c11f1a9fb83a395bfa6b0a2d9cc2fd8ffebafdb1ccbd529632153f793904c2615b7f09fe1a345473fd1c35845172a8eb1",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "better-sqlite3"]
+  }
+}

@@ -5,6 +5,7 @@ import logging
 from bs4 import BeautifulSoup
 
 from .base_collector import BaseCollector, CollectionResult
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 class MeituanCollector(BaseCollector):
     platform = "meituan"
     base_url = "https://i.meituan.com"
-    strategy_order = ["crawler", "cache"]
+    strategy_order = ["api", "crawler", "cache"]
 
     def __init__(self):
         super().__init__()
@@ -20,6 +21,22 @@ class MeituanCollector(BaseCollector):
             "Referer": "https://i.meituan.com/",
             "Origin": "https://i.meituan.com",
         }
+        self._api_client = None
+
+    async def _get_api_client(self):
+        if self._api_client is None:
+            from .api.meituan_api import MeituanAPIClient
+            
+            if settings.meituan_token:
+                self._api_client = MeituanAPIClient(token=settings.meituan_token)
+                logger.info("Meituan API client configured with Token authentication")
+            elif settings.meituan_app_key and settings.meituan_app_secret:
+                self._api_client = MeituanAPIClient(
+                    settings.meituan_app_key,
+                    settings.meituan_app_secret,
+                )
+                logger.info("Meituan API client configured with AppKey/AppSecret authentication")
+        return self._api_client
 
     async def collect_shop_menu(self, shop_url: str) -> CollectionResult:
         try:
@@ -236,6 +253,171 @@ class MeituanCollector(BaseCollector):
             },
             error=error,
         )
+
+    async def _collect_shops_api(self, location: dict) -> CollectionResult:
+        client = await self._get_api_client()
+        if client is None:
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": "API 客户端未配置"},
+                error="api_not_configured",
+            )
+
+        keyword = location.get("keyword", "")
+        city = location.get("city", "北京")
+        latitude = location.get("latitude")
+        longitude = location.get("longitude")
+
+        if not keyword:
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": "缺少搜索关键词"},
+                error="missing_keyword",
+            )
+
+        try:
+            result = await client.search_shops(
+                keyword=keyword,
+                city=city,
+                latitude=latitude,
+                longitude=longitude,
+            )
+
+            if result.get("code") == "OP_SUCCESS":
+                data = result.get("data", {})
+                poi_list = data.get("poiList", data.get("list", []))
+                shops = []
+                for item in poi_list:
+                    shops.append({
+                        "shop_id": str(item.get("poiId", item.get("id", ""))),
+                        "name": item.get("name", item.get("title", "")),
+                        "rating": item.get("rating", item.get("avgScore", 0.0)),
+                        "category": item.get("categoryName", item.get("category", "")),
+                        "address": item.get("address", ""),
+                        "delivery_fee": item.get("deliveryFee", 0.0),
+                        "min_order": item.get("minOrderAmount", 0.0),
+                        "delivery_time": item.get("deliveryTime", ""),
+                        "app_poi_code": item.get("appPoiCode", ""),
+                    })
+                if shops:
+                    return CollectionResult(
+                        success=True,
+                        data={"platform": self.platform, "shops": shops, "keyword": keyword},
+                        source="api",
+                    )
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": "API 返回数据为空"},
+                error="api_empty_result",
+            )
+        except Exception as e:
+            logger.warning("Meituan API search_shops failed: %s", e)
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": f"API 调用失败: {e}"},
+                error=str(e),
+            )
+
+    async def _collect_products_api(self, shop_id: str) -> CollectionResult:
+        client = await self._get_api_client()
+        if client is None:
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": "API 客户端未配置"},
+                error="api_not_configured",
+            )
+
+        try:
+            result = await client.get_food_list(app_poi_code=shop_id)
+            if result.get("code") == "OP_SUCCESS":
+                food_list = result.get("data", [])
+                products = []
+                delivery_info = {}
+                for food in food_list:
+                    products.append({
+                        "name": food.get("name", ""),
+                        "price": food.get("price", 0.0),
+                        "image_url": food.get("picture", food.get("pictures", "").split(",")[0] if food.get("pictures") else ""),
+                        "month_saled": food.get("monthSaled", 0),
+                        "is_sold_out": food.get("is_sold_out", 0) == 1,
+                        "box_price": food.get("box_price", 0.0),
+                        "spec": food.get("spec", ""),
+                    })
+                    delivery_info["fee"] = food.get("deliveryFee", 0.0)
+
+                coupons_result = await client.get_coupons(poi_id=shop_id)
+                coupons = []
+                if coupons_result.get("code") == "OP_SUCCESS":
+                    for coupon in coupons_result.get("data", []):
+                        coupons.append({
+                            "type": "full_reduction" if coupon.get("threshold") else "direct",
+                            "threshold": coupon.get("threshold", 0.0),
+                            "discount": coupon.get("discount", coupon.get("value", 0.0)),
+                            "description": coupon.get("description", ""),
+                        })
+
+                return CollectionResult(
+                    success=True,
+                    data={
+                        "platform": "meituan",
+                        "platform_name": "美团",
+                        "shop": {"shop_id": shop_id},
+                        "products": products,
+                        "delivery": delivery_info,
+                        "coupons": coupons,
+                    },
+                    source="api",
+                )
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": "API 返回数据为空"},
+                error="api_empty_result",
+            )
+        except Exception as e:
+            logger.warning("Meituan API get_food_list failed: %s", e)
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": f"API 调用失败: {e}"},
+                error=str(e),
+            )
+
+    async def _collect_coupons_api(self) -> CollectionResult:
+        client = await self._get_api_client()
+        if client is None:
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": "API 客户端未配置"},
+                error="api_not_configured",
+            )
+
+        try:
+            result = await client.get_coupons()
+            if result.get("code") == "OP_SUCCESS":
+                coupons = []
+                for coupon in result.get("data", []):
+                    coupons.append({
+                        "type": "full_reduction" if coupon.get("threshold") else "direct",
+                        "threshold": coupon.get("threshold", 0.0),
+                        "discount": coupon.get("discount", coupon.get("value", 0.0)),
+                        "description": coupon.get("description", ""),
+                    })
+                return CollectionResult(
+                    success=True,
+                    data={"platform": self.platform, "coupons": coupons},
+                    source="api",
+                )
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": "API 返回数据为空"},
+                error="api_empty_result",
+            )
+        except Exception as e:
+            logger.warning("Meituan API get_coupons failed: %s", e)
+            return CollectionResult(
+                success=False,
+                data={"platform": self.platform, "message": f"API 调用失败: {e}"},
+                error=str(e),
+            )
 
     async def _collect_shops_crawler(self, location: dict) -> CollectionResult:
         keyword = location.get("keyword", "")

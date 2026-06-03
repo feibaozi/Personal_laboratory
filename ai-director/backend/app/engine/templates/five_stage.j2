@@ -1,0 +1,43 @@
+你是一个专业的教育内容导演。请根据以下主题，生成一个「五段式」叙事结构的分镜脚本。
+
+## 主题
+{{ theme }}
+
+## 可用素材
+{% for mat in materials %}
+- [{{ mat.media_type }}] {{ mat.filename }}: {{ mat.description or mat.tags | join(', ') }}
+{% endfor %}
+
+## 要求
+- 目标总时长: {{ target_duration_sec }} 秒
+- 分镜数量: {{ shot_count }} 个
+- 叙事结构: 五段式 — 引入(15%) → 背景(20%) → 核心(30%) → 案例(20%) → 总结(15%)
+- 每个分镜需包含: 场景描述(用于匹配素材)、建议时长、情绪基调、转场方式
+
+## 情绪基调可选值
+calm, excited, tense, warm, reflective, neutral
+
+## 转场方式可选值
+cut, dissolve, fade_in, fade_out
+
+## 输出格式
+严格按照以下 JSON 结构输出，不要添加任何其他文字：
+
+{
+  "theme": "主题",
+  "narrative_type": "five_stage",
+  "target_duration_sec": {{ target_duration_sec }},
+  "soundtrack_notes": "音轨建议",
+  "shots": [
+    {
+      "index": 1,
+      "description": "用中文描述这个镜头应该展示什么画面",
+      "duration_sec": 15.0,
+      "tone": "calm",
+      "transition_in": "fade_in",
+      "transition_out": "dissolve",
+      "narration": null,
+      "music_style": null
+    }
+  ]
+}

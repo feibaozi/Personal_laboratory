@@ -42,6 +42,7 @@ build/
 # ============================================
 .vscode/
 .idea/
+.trae/
 *.swp
 *.swo
 *~
@@ -54,6 +55,7 @@ Thumbs.db
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 .cache/
@@ -64,9 +66,38 @@ Thumbs.db
 # ============================================
 # 构建产物
 # ============================================
+.next/
+out/
 release/
 output/
+dist-electron/
+.dart_tool/
 *.exe
 *.dll
 *.so
 *.dylib
+
+# ============================================
+# Rust 构建产物
+# ============================================
+target/
+
+# ============================================
+# Node.js 原生模块 / TS 增量编译 / 扩展包
+# ============================================
+*.node
+*.tsbuildinfo
+*.vsix
+
+# ============================================
+# Tauri 框架缓存
+# ============================================
+.tauri/
+
+# ============================================
+# Codebase Agent 专属
+# ============================================
+codebase-agent/.codebase-cache/
+codebase-agent/packages/engine/index.js
+codebase-agent/packages/engine/index.d.ts
+codebase-agent/packages/engine/package-lock.json

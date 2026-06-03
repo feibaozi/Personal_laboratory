@@ -6,3 +6,11 @@ release/
 *.db-wal
 .DS_Store
 Thumbs.db
+
+__pycache__/
+*.pyc
+.env
+.env.*
+credentials.*
+*.pem
+*.key

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/home_provider.dart';
+import '../providers/crawl_provider.dart';
 import '../models/index.dart';
 import '../widgets/cards/index.dart';
 
@@ -14,6 +15,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final List<String> _platforms = ['全部', '美团', '饿了么', '京东外卖', '抖音外卖'];
   int _selectedPlatformIndex = 0;
+  final _searchController = TextEditingController();
 
   static const _platformKeyMap = {
     0: 'all',
@@ -29,6 +31,17 @@ class _HomePageState extends State<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HomeProvider>().loadHomeData();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearch(String keyword) {
+    if (keyword.trim().isEmpty) return;
+    context.read<CrawlProvider>().searchShops(keyword);
   }
 
   void _onPlatformChanged(int index) {
@@ -210,13 +223,19 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      child: const TextField(
+      child: TextField(
+        controller: _searchController,
+        onSubmitted: _onSearch,
         decoration: InputDecoration(
-          hintText: '搜索店铺/菜品',
-          hintStyle: TextStyle(color: Colors.grey),
-          prefixIcon: Icon(Icons.search, color: Color(0xFFFF6B6B)),
+          hintText: '搜索店铺/菜品，实时爬取美团数据',
+          hintStyle: const TextStyle(color: Colors.grey),
+          prefixIcon: const Icon(Icons.search, color: Color(0xFFFF6B6B)),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.send, color: Color(0xFFFF6B6B), size: 20),
+            onPressed: () => _onSearch(_searchController.text),
+          ),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
       ),
     );
