@@ -1,0 +1,3 @@
+[submodule "daily-cross-inspire"]
+	path = daily-cross-inspire
+	url = https://github.com/feibaozi/daily-cross-inspire.git
